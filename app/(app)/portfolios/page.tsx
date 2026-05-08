@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Plus, Trash2, FolderOpen } from "lucide-react"
 import { Portfolio } from "@/lib/supabase"
+import { getStarredPortfolioId, setStarredPortfolioId } from "@/lib/use-active-portfolio"
 
 export default function PortfoliosPage() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
@@ -12,6 +13,9 @@ export default function PortfoliosPage() {
   const [newName, setNewName] = useState("")
   const [newDesc, setNewDesc] = useState("")
   const [showForm, setShowForm] = useState(false)
+  const [starredId, setStarredId] = useState<string | null>(null)
+
+  useEffect(() => { setStarredId(getStarredPortfolioId()) }, [])
 
   async function load() {
     const res = await fetch("/api/portfolios")
@@ -132,7 +136,12 @@ export default function PortfoliosPage() {
               className="flex items-center justify-between border border-border rounded-lg p-4 bg-card hover:bg-accent/30 transition-colors group"
             >
               <Link href={`/portfolios/${p.id}`} className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">{p.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-semibold text-sm">{p.name}</p>
+                  {starredId === p.id && (
+                    <span className="text-yellow-400 text-xs leading-none" title="Default portfolio">★</span>
+                  )}
+                </div>
                 {p.description && (
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">{p.description}</p>
                 )}
@@ -140,12 +149,30 @@ export default function PortfoliosPage() {
                   Created {new Date(p.created_at).toLocaleDateString()}
                 </p>
               </Link>
-              <button
-                onClick={() => handleDelete(p.id, p.name)}
-                className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all ml-3"
-              >
-                <Trash2 size={16} />
-              </button>
+              <div className="flex items-center gap-1 ml-3 opacity-0 group-hover:opacity-100 transition-all">
+                <button
+                  title={starredId === p.id ? "Remove default" : "Set as default portfolio"}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    const next = starredId === p.id ? null : p.id
+                    setStarredPortfolioId(next)
+                    setStarredId(next)
+                  }}
+                  className={`p-2 rounded-md transition-colors text-base leading-none ${
+                    starredId === p.id
+                      ? "text-yellow-400 hover:text-yellow-500"
+                      : "text-muted-foreground/40 hover:text-yellow-400"
+                  }`}
+                >
+                  ★
+                </button>
+                <button
+                  onClick={() => handleDelete(p.id, p.name)}
+                  className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
           ))}
         </div>

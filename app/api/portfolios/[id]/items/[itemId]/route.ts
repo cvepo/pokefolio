@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { backfillPriceHistory } from "@/lib/backfill"
+import { rebuildPortfolioSnapshots } from "@/lib/rebuild-portfolio-snapshots"
 
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
-  const { itemId } = await params
+  const { id, itemId } = await params
   const { error } = await supabase.from("portfolio_items").delete().eq("id", itemId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await rebuildPortfolioSnapshots([id])
   return NextResponse.json({ ok: true })
 }
 

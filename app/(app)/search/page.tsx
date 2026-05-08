@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Search, Plus, Package } from "lucide-react"
+import { Search, Plus, Package, CheckCircle, ChevronDown } from "lucide-react"
 import { Portfolio } from "@/lib/supabase"
 import { formatCurrency } from "@/lib/utils"
+import { useActivePortfolio } from "@/lib/use-active-portfolio"
 
 type SearchResult = {
   id: string
@@ -25,18 +26,48 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [meta, setMeta] = useState<{ apiDailyRequestsRemaining?: number } | null>(null)
-  const [addModal, setAddModal] = useState<AddModal>(null)
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
-  const [portfolioId, setPortfolioId] = useState("")
+  const [portfolioItems, setPortfolioItems] = useState<Set<string>>(new Set())
+  const [addModal, setAddModal] = useState<AddModal>(null)
   const [qty, setQty] = useState("1")
   const [buyPrice, setBuyPrice] = useState("")
   const [buyDate, setBuyDate] = useState("")
   const [adding, setAdding] = useState(false)
+  const [portfolioPickerOpen, setPortfolioPickerOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
 
+  const { activePortfolio, activePortfolioId, setActivePortfolioId, starredId, starPortfolio } =
+    useActivePortfolio(portfolios)
+
+  // Load portfolios once
   useEffect(() => {
-    fetch("/api/portfolios").then((r) => r.json()).then(setPortfolios)
+    fetch("/api/portfolios")
+      .then((r) => r.json())
+      .then((data) => setPortfolios(Array.isArray(data) ? data : []))
   }, [])
+
+  // Load items for active portfolio whenever it changes
+  useEffect(() => {
+    if (!activePortfolioId) { setPortfolioItems(new Set()); return }
+    fetch(`/api/portfolios/${activePortfolioId}/items`)
+      .then((r) => r.json())
+      .then((data: Array<{ product_id: string }>) => {
+        setPortfolioItems(new Set(Array.isArray(data) ? data.map((i) => i.product_id) : []))
+      })
+  }, [activePortfolioId])
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!portfolioPickerOpen) return
+    function onClickOutside(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPortfolioPickerOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [portfolioPickerOpen])
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -64,16 +95,15 @@ export default function SearchPage() {
     setAddModal({ product, variant: sealedVariant })
     setBuyPrice(sealedVariant.price?.toFixed(2) ?? "")
     setBuyDate(new Date().toISOString().split("T")[0])
-    setPortfolioId(portfolios[0]?.id ?? "")
     setQty("1")
   }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    if (!addModal || !portfolioId) return
+    if (!addModal || !activePortfolioId) return
     setAdding(true)
 
-    await fetch(`/api/portfolios/${portfolioId}/items`, {
+    await fetch(`/api/portfolios/${activePortfolioId}/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -84,6 +114,8 @@ export default function SearchPage() {
       }),
     })
 
+    // Optimistically mark product as in-portfolio
+    setPortfolioItems((prev) => new Set([...prev, addModal.product.id]))
     setAddModal(null)
     setAdding(false)
   }
@@ -94,11 +126,68 @@ export default function SearchPage() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Search</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Search for Pokémon sealed products to add to your portfolio
-        </p>
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Search</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Search for Pokémon sealed products to add to your portfolio
+          </p>
+        </div>
+
+        {/* Active portfolio indicator */}
+        {portfolios.length > 0 && (
+          <div className="relative shrink-0" ref={pickerRef}>
+            <button
+              onClick={() => setPortfolioPickerOpen((v) => !v)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-sm font-medium hover:bg-accent transition-colors"
+            >
+              <span className="text-xs text-muted-foreground">Portfolio:</span>
+              <span>{activePortfolio?.name ?? "—"}</span>
+              {starredId === activePortfolioId && (
+                <span className="text-yellow-400" title="Starred">★</span>
+              )}
+              <ChevronDown size={14} className="text-muted-foreground" />
+            </button>
+
+            {portfolioPickerOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg overflow-hidden min-w-[220px]">
+                {portfolios.map((p) => (
+                  <div
+                    key={p.id}
+                    className={`flex items-center gap-2 px-3 py-2.5 text-sm cursor-pointer hover:bg-accent transition-colors ${
+                      p.id === activePortfolioId ? "bg-accent/60" : ""
+                    }`}
+                  >
+                    <span
+                      className="flex-1"
+                      onClick={() => {
+                        setActivePortfolioId(p.id)
+                        setPortfolioPickerOpen(false)
+                      }}
+                    >
+                      {p.name}
+                    </span>
+                    <button
+                      title={starredId === p.id ? "Unstar" : "Star as default"}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        starPortfolio(starredId === p.id ? "" : p.id)
+                      }}
+                      className={`text-base leading-none transition-colors ${
+                        starredId === p.id
+                          ? "text-yellow-400"
+                          : "text-muted-foreground/40 hover:text-yellow-400"
+                      }`}
+                    >
+                      ★
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSearch} className="flex gap-3">
@@ -135,7 +224,10 @@ export default function SearchPage() {
           <p className="text-xs text-muted-foreground">{sealedResults.length} sealed product(s) found</p>
           <div className="grid gap-3">
             {sealedResults.map((product) => {
-              const sealedVariant = product.variants.find((v) => v.condition === "S" || v.condition === "Sealed")
+              const sealedVariant = product.variants.find(
+                (v) => v.condition === "S" || v.condition === "Sealed"
+              )
+              const alreadyOwned = portfolioItems.has(product.id)
               return (
                 <div
                   key={product.id}
@@ -158,7 +250,15 @@ export default function SearchPage() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{product.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm truncate">{product.name}</p>
+                        {alreadyOwned && (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-500 shrink-0">
+                            <CheckCircle size={12} />
+                            In portfolio
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">{product.set_name}</p>
                     </div>
                   </div>
@@ -171,10 +271,14 @@ export default function SearchPage() {
                     </div>
                     <button
                       onClick={() => openAddModal(product)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-opacity ${
+                        alreadyOwned
+                          ? "bg-muted text-muted-foreground hover:opacity-80"
+                          : "bg-primary text-primary-foreground hover:opacity-90"
+                      }`}
                     >
                       <Plus size={14} />
-                      Add
+                      {alreadyOwned ? "Add again" : "Add"}
                     </button>
                   </div>
                 </div>
@@ -196,8 +300,8 @@ export default function SearchPage() {
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">Portfolio</label>
                 <select
-                  value={portfolioId}
-                  onChange={(e) => setPortfolioId(e.target.value)}
+                  value={activePortfolioId ?? ""}
+                  onChange={(e) => setActivePortfolioId(e.target.value)}
                   className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {portfolios.map((p) => (
@@ -240,7 +344,7 @@ export default function SearchPage() {
               <div className="flex gap-2 pt-1">
                 <button
                   type="submit"
-                  disabled={adding || !portfolioId || !buyPrice}
+                  disabled={adding || !activePortfolioId || !buyPrice}
                   className="flex-1 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                   {adding ? "Adding..." : "Add to Portfolio"}
