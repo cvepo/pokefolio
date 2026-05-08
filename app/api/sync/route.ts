@@ -65,7 +65,7 @@ async function syncPrices() {
     const cards = result.data ?? []
     for (const card of cards) {
       const sealedVariant = card.variants?.find(
-        (v: { condition: string; price: number }) => v.condition === "Sealed"
+        (v: { condition: string; price: number }) => v.condition === "S" || v.condition === "Sealed"
       )
       if (sealedVariant?.price != null) {
         updatedPrices[card.id] = sealedVariant.price

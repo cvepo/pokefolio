@@ -44,12 +44,13 @@ export async function GET(request: Request) {
   }>
 
   // Only keep cards that have a sealed variant
-  const sealedCards = cards.filter((c) => c.variants.some((v) => v.condition === "Sealed"))
+  const isSealed = (condition: string) => condition === "S" || condition === "Sealed"
+  const sealedCards = cards.filter((c) => c.variants.some((v) => isSealed(v.condition)))
 
   // Upsert into products table (cache)
   if (sealedCards.length > 0) {
     const rows = sealedCards.map((card) => {
-      const sealedVariant = card.variants.find((v) => v.condition === "Sealed")!
+      const sealedVariant = card.variants.find((v) => isSealed(v.condition))!
       return {
         id: card.id,
         name: card.name,
