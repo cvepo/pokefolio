@@ -497,11 +497,26 @@ export default function PortfolioDetailPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/products/${encodeURIComponent(item.product_id)}`}
-                        className="font-medium hover:underline underline-offset-2"
+                        className="flex items-center gap-3 group/product"
                       >
-                        {item.product?.name ?? item.product_id}
+                        <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                          {item.product?.tcgplayer_id ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={`https://product-images.tcgplayer.com/fit-in/64x64/${item.product.tcgplayer_id}.jpg`}
+                              alt={item.product.name}
+                              className="w-10 h-10 object-cover"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+                            />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium group-hover/product:underline underline-offset-2 truncate">
+                            {item.product?.name ?? item.product_id}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">{item.product?.set_name}</p>
+                        </div>
                       </Link>
-                      <p className="text-xs text-muted-foreground">{item.product?.set_name}</p>
                     </td>
                     <td
                       className="px-4 py-3 text-right cursor-pointer"

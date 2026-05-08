@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { backfillPriceHistory } from "@/lib/backfill"
 
 const BATCH_SIZE = 20 // free plan limit per batch request
 
@@ -88,6 +89,28 @@ async function syncPrices() {
     )
   )
 
+  // Backfill historical price snapshots for any product that lacks history.
+  // Use the earliest purchase_date among items holding that product as the cutoff.
+  const { data: itemsWithDates } = await supabase
+    .from("portfolio_items")
+    .select("product_id, purchase_date")
+    .in("product_id", productIds)
+
+  const earliestByProduct: Record<string, string | null> = {}
+  for (const it of itemsWithDates ?? []) {
+    const curr = earliestByProduct[it.product_id]
+    if (curr === undefined) {
+      earliestByProduct[it.product_id] = it.purchase_date
+    } else if (it.purchase_date && (curr === null || new Date(it.purchase_date) < new Date(curr))) {
+      earliestByProduct[it.product_id] = it.purchase_date
+    }
+  }
+
+  for (const product of products) {
+    const cutoff = earliestByProduct[product.id] ?? null
+    await backfillPriceHistory(product.id, product.variant_id, cutoff)
+  }
+
   // Insert price snapshots (skip if already exists today)
   const snapshotRows = Object.entries(updatedPrices).map(([product_id, price]) => ({
     product_id,
@@ -101,30 +124,118 @@ async function syncPrices() {
     })
   }
 
-  // Compute and store portfolio snapshots
+  // Rebuild portfolio_snapshots from full price history (so dashboard chart
+  // reflects backfilled product price data, not just today's value).
   const { data: allItems } = await supabase
     .from("portfolio_items")
-    .select("portfolio_id, product_id, quantity")
+    .select("portfolio_id, product_id, quantity, purchase_date, purchase_price")
 
   if (allItems?.length) {
-    const portfolioTotals: Record<string, number> = {}
-    for (const item of allItems) {
-      const price = updatedPrices[item.product_id] ?? 0
-      portfolioTotals[item.portfolio_id] =
-        (portfolioTotals[item.portfolio_id] ?? 0) + price * item.quantity
+    // Pull all price snapshots for products held in any portfolio
+    const { data: allPriceSnaps } = await supabase
+      .from("price_snapshots")
+      .select("product_id, price, snapshot_date")
+      .in("product_id", productIds)
+
+    // Index prices: product_id -> sorted [{ date, price }]
+    const pricesByProduct: Record<string, { date: string; price: number }[]> = {}
+    for (const snap of allPriceSnaps ?? []) {
+      const arr = pricesByProduct[snap.product_id] ?? (pricesByProduct[snap.product_id] = [])
+      arr.push({ date: snap.snapshot_date, price: Number(snap.price) })
+    }
+    for (const arr of Object.values(pricesByProduct)) {
+      arr.sort((a, b) => a.date.localeCompare(b.date))
     }
 
-    const portfolioSnapshotRows = Object.entries(portfolioTotals).map(
-      ([portfolio_id, total_value]) => ({
-        portfolio_id,
-        total_value,
-        snapshot_date: today,
-      })
-    )
+    // Determine the date range to compute (earliest purchase across all items → today)
+    let earliest: string | null = null
+    for (const it of allItems) {
+      if (it.purchase_date && (earliest === null || it.purchase_date < earliest)) {
+        earliest = it.purchase_date
+      }
+    }
+    // If no purchase_date set, fall back to earliest snapshot date
+    if (earliest === null) {
+      for (const arr of Object.values(pricesByProduct)) {
+        if (arr.length && (earliest === null || arr[0].date < earliest)) {
+          earliest = arr[0].date
+        }
+      }
+    }
 
-    await supabase.from("portfolio_snapshots").upsert(portfolioSnapshotRows, {
-      onConflict: "portfolio_id,snapshot_date",
-    })
+    const portfolioSnapshotRows: Array<{
+      portfolio_id: string
+      total_value: number
+      snapshot_date: string
+    }> = []
+
+    if (earliest) {
+      // Iterate every day from earliest → today
+      const dates: string[] = []
+      const cursor = new Date(earliest + "T00:00:00Z")
+      const end = new Date(today + "T00:00:00Z")
+      while (cursor <= end) {
+        dates.push(cursor.toISOString().split("T")[0])
+        cursor.setUTCDate(cursor.getUTCDate() + 1)
+      }
+
+      // For each (portfolio, date), sum item quantities × most-recent-price-on-or-before-date.
+      // Skip items whose purchase_date is after the snapshot date (didn't own it yet).
+      const itemsByPortfolio: Record<string, typeof allItems> = {}
+      for (const it of allItems) {
+        ;(itemsByPortfolio[it.portfolio_id] ??= []).push(it)
+      }
+
+      const priceOnOrBefore = (productId: string, date: string): number | null => {
+        const arr = pricesByProduct[productId]
+        if (!arr?.length) return null
+        // binary search for last entry with date <= target
+        let lo = 0
+        let hi = arr.length - 1
+        let found = -1
+        while (lo <= hi) {
+          const mid = (lo + hi) >>> 1
+          if (arr[mid].date <= date) {
+            found = mid
+            lo = mid + 1
+          } else {
+            hi = mid - 1
+          }
+        }
+        return found >= 0 ? arr[found].price : null
+      }
+
+      for (const date of dates) {
+        for (const [portfolio_id, pItems] of Object.entries(itemsByPortfolio)) {
+          let total = 0
+          let anyOwned = false
+          for (const it of pItems) {
+            if (it.purchase_date && it.purchase_date > date) continue // didn't own yet
+            anyOwned = true
+            // Prefer historical market price; if none exists yet (date earlier
+            // than oldest snapshot we have), fall back to purchase price so
+            // the chart shows a flat cost-basis line instead of a fake jump.
+            const market = priceOnOrBefore(it.product_id, date)
+            const price = market ?? Number(it.purchase_price)
+            total += price * it.quantity
+          }
+          if (anyOwned) {
+            portfolioSnapshotRows.push({ portfolio_id, total_value: total, snapshot_date: date })
+          }
+        }
+      }
+    }
+
+    if (portfolioSnapshotRows.length > 0) {
+      // Upsert in chunks to avoid payload limits
+      const CHUNK = 500
+      for (let i = 0; i < portfolioSnapshotRows.length; i += CHUNK) {
+        await supabase.from("portfolio_snapshots").upsert(
+          portfolioSnapshotRows.slice(i, i + CHUNK),
+          { onConflict: "portfolio_id,snapshot_date" }
+        )
+      }
+    }
   }
 
   return NextResponse.json({

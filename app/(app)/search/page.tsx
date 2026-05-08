@@ -59,7 +59,7 @@ export default function SearchPage() {
   }
 
   function openAddModal(product: SearchResult) {
-    const sealedVariant = product.variants.find((v) => v.condition === "Sealed")
+    const sealedVariant = product.variants.find((v) => v.condition === "S" || v.condition === "Sealed")
     if (!sealedVariant) return
     setAddModal({ product, variant: sealedVariant })
     setBuyPrice(sealedVariant.price?.toFixed(2) ?? "")
@@ -88,7 +88,9 @@ export default function SearchPage() {
     setAdding(false)
   }
 
-  const sealedResults = results.filter((r) => r.variants.some((v) => v.condition === "Sealed"))
+  const sealedResults = results.filter((r) =>
+    r.variants.some((v) => v.condition === "S" || v.condition === "Sealed")
+  )
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-6">
@@ -133,7 +135,7 @@ export default function SearchPage() {
           <p className="text-xs text-muted-foreground">{sealedResults.length} sealed product(s) found</p>
           <div className="grid gap-3">
             {sealedResults.map((product) => {
-              const sealedVariant = product.variants.find((v) => v.condition === "Sealed")
+              const sealedVariant = product.variants.find((v) => v.condition === "S" || v.condition === "Sealed")
               return (
                 <div
                   key={product.id}
