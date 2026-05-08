@@ -300,7 +300,7 @@ export default function ProductPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Price ($)</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Price/unit ($)</label>
                 <input
                   type="number" step="0.01" min="0" value={txPrice} onChange={(e) => setTxPrice(e.target.value)}
                   className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"

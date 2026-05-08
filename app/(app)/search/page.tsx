@@ -322,7 +322,7 @@ export default function SearchPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Buy Price ($)</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Buy price/unit ($)</label>
                   <input
                     type="number"
                     step="0.01"
