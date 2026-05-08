@@ -213,6 +213,22 @@ export default function ProductPage() {
         )}
       </div>
 
+      {/* Meta info */}
+      <div className="flex items-center gap-6 text-xs text-muted-foreground px-1">
+        <span>
+          <span className="uppercase tracking-wide">Data points:</span>{" "}
+          <span className="text-foreground font-medium">{snapshots.length} day{snapshots.length === 1 ? "" : "s"}</span>
+        </span>
+        <span>
+          <span className="uppercase tracking-wide">Last updated:</span>{" "}
+          <span className="text-foreground font-medium">
+            {product.last_synced_at
+              ? new Date(product.last_synced_at).toLocaleDateString()
+              : "Never synced"}
+          </span>
+        </span>
+      </div>
+
       {/* Inventory log */}
       <div className="border border-border rounded-lg bg-card">
         <div className="flex items-start justify-between gap-3 p-4 border-b border-border">
