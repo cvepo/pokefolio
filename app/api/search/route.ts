@@ -14,7 +14,10 @@ export async function GET(request: Request) {
   url.searchParams.set("q", q)
   url.searchParams.set("game", "pokemon")
   url.searchParams.set("condition", "S")
-  url.searchParams.set("include_price_history", "false")
+  // Include 1y of price history so we can show data-point count per result
+  // (helps disambiguate when multiple matches have the same name).
+  url.searchParams.set("include_price_history", "true")
+  url.searchParams.set("priceHistoryDuration", "1y")
   url.searchParams.set("include_statistics", "7d")
 
   const res = await fetch(url.toString(), {
@@ -40,12 +43,20 @@ export async function GET(request: Request) {
       printing: string
       price: number
       priceChange7d: number | null
+      priceHistory?: Array<{ t: number; p: number }> | null
     }>
   }>
 
   // Only keep cards that have a sealed variant
   const isSealed = (condition: string) => condition === "S" || condition === "Sealed"
   const sealedCards = cards.filter((c) => c.variants.some((v) => isSealed(v.condition)))
+
+  // Annotate each card with the data-point count for its sealed variant.
+  const annotatedCards = sealedCards.map((card) => {
+    const sealedVariant = card.variants.find((v) => isSealed(v.condition))!
+    const priceHistoryCount = sealedVariant.priceHistory?.length ?? 0
+    return { ...card, priceHistoryCount }
+  })
 
   // Upsert into products table (cache)
   if (sealedCards.length > 0) {
@@ -66,5 +77,5 @@ export async function GET(request: Request) {
     await supabase.from("products").upsert(rows, { onConflict: "id" })
   }
 
-  return NextResponse.json({ data: sealedCards, meta: result.meta, _metadata: result._metadata })
+  return NextResponse.json({ data: annotatedCards, meta: result.meta, _metadata: result._metadata })
 }

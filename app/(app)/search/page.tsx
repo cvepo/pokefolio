@@ -13,6 +13,18 @@ type SearchResult = {
   set_name: string
   tcgplayerId: string
   variants: Array<{ id: string; condition: string; price: number }>
+  priceHistoryCount?: number
+}
+
+/**
+ * Map a data-point count (0-365) to a hue interpolating red → green.
+ * Below 100 stays in red territory; ramps to green by 365.
+ */
+function dataPointColor(count: number): string {
+  const clamped = Math.max(0, Math.min(365, count))
+  // Hue 0 = red, hue 120 = green. Linear interpolation across 0..365.
+  const hue = (clamped / 365) * 120
+  return `hsl(${hue}, 75%, 50%)`
 }
 
 type AddModal = {
@@ -264,6 +276,20 @@ export default function SearchPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4 ml-4 shrink-0">
+                    {product.priceHistoryCount != null && (
+                      <div
+                        className="text-right"
+                        title={`${product.priceHistoryCount} day${product.priceHistoryCount === 1 ? "" : "s"} of price history available`}
+                      >
+                        <p
+                          className="font-semibold text-sm tabular-nums"
+                          style={{ color: dataPointColor(product.priceHistoryCount) }}
+                        >
+                          {product.priceHistoryCount}
+                        </p>
+                        <p className="text-xs text-muted-foreground">data pts</p>
+                      </div>
+                    )}
                     <div className="text-right">
                       <p className="font-semibold text-sm">
                         {sealedVariant?.price ? formatCurrency(sealedVariant.price) : "—"}
