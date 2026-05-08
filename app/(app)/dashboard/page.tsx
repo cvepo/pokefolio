@@ -97,15 +97,21 @@ export default function DashboardPage() {
   }))
 
   const totalValue = portfolios.reduce((s, p) => s + p.latestValue, 0)
-  const totalCost = portfolios.reduce((s, p) => s + p.costBasis, 0)
-  const totalGain = totalValue - totalCost
-  const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0
-  const isPositive = totalGain >= 0
 
   const firstChartValue = chartData[0]?.value
   const lastChartValue = chartData[chartData.length - 1]?.value
-  const periodChange = firstChartValue && lastChartValue ? lastChartValue - firstChartValue : null
-  const periodChangePct = firstChartValue && periodChange != null ? (periodChange / firstChartValue) * 100 : null
+  const hasPeriodMetric =
+    chartData.length >= 2 &&
+    firstChartValue != null &&
+    lastChartValue != null &&
+    typeof firstChartValue === "number" &&
+    typeof lastChartValue === "number"
+  const periodChange = hasPeriodMetric ? lastChartValue - firstChartValue : null
+  const periodChangePct =
+    periodChange != null && firstChartValue > 0
+      ? (periodChange / firstChartValue) * 100
+      : null
+  const isPositivePeriod = periodChange != null && periodChange >= 0
 
   if (loading) {
     return (
@@ -142,15 +148,30 @@ export default function DashboardPage() {
           {/* Total value header */}
           <div className="space-y-1">
             <p className="text-4xl font-bold">{formatCurrency(totalValue)}</p>
-            <div className={`flex items-center gap-1.5 text-sm font-medium ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
-              {isPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-              <span>
-                {isPositive ? "+" : ""}{formatCurrency(totalGain)} ({formatPercent(totalGainPct)}) all time
-              </span>
-            </div>
-            {periodChange != null && periodChangePct != null && (
-              <p className="text-xs text-muted-foreground">
-                {isPositive ? "+" : ""}{formatCurrency(periodChange)} ({formatPercent(periodChangePct)}) in {timeframe}
+            {hasPeriodMetric && periodChange != null ? (
+              <>
+                <div
+                  className={`flex items-center gap-1.5 text-sm font-medium ${
+                    isPositivePeriod ? "text-emerald-500" : "text-red-500"
+                  }`}
+                >
+                  {isPositivePeriod ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                  <span>
+                    {isPositivePeriod ? "+" : ""}
+                    {formatCurrency(periodChange)}
+                    {periodChangePct != null ? (
+                      <> ({formatPercent(periodChangePct)})</>
+                    ) : (
+                      <> (—%)</>
+                    )}{" "}
+                    · {timeframe}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">Based on synced portfolio history in this range.</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">—</span> change for {timeframe} (need more history — run sync)
               </p>
             )}
           </div>

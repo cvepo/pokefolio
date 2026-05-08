@@ -136,7 +136,7 @@ export default function PortfoliosPage() {
                 {p.description && (
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">{p.description}</p>
                 )}
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="hidden group-hover:block text-xs text-muted-foreground mt-1">
                   Created {new Date(p.created_at).toLocaleDateString()}
                 </p>
               </Link>
