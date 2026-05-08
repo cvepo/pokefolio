@@ -24,16 +24,35 @@ export type Portfolio = {
   created_at: string
 }
 
-export type PortfolioItem = {
+export type Transaction = {
   id: string
   portfolio_id: string
   product_id: string
+  type: "buy" | "sell"
   quantity: number
-  purchase_price: number
-  purchase_date: string | null
+  price: number
+  transaction_date: string
   notes: string | null
   created_at: string
   product?: Product
+}
+
+/**
+ * "Holding" — a derived view of current ownership of a product in a portfolio,
+ * computed from the underlying buy/sell transactions. Returned by GET /api/portfolios/[id]/items.
+ */
+export type PortfolioItem = {
+  product_id: string
+  product?: Product
+  // current net holding (buys − sells)
+  quantity: number
+  // average cost basis of remaining (FIFO-unsold) units, $/unit
+  purchase_price: number
+  // earliest buy date among remaining (FIFO-unsold) lots
+  purchase_date: string | null
+  realized_pnl: number
+  total_buy_qty: number
+  total_sell_qty: number
 }
 
 export type PriceSnapshot = {

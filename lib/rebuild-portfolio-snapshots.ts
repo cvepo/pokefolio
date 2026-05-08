@@ -1,24 +1,24 @@
 import { supabase } from "@/lib/supabase"
+import { computeHoldingsAsOf } from "@/lib/holdings"
+import type { Transaction } from "@/lib/supabase"
 
 /**
- * Rebuilds portfolio_snapshots from existing price_snapshots data — no API
- * calls. Pass portfolioIds to scope the rebuild to specific portfolios only,
- * or omit to rebuild all.
+ * Rebuilds portfolio_snapshots from existing transactions + price_snapshots data.
+ * No external API calls. Pass portfolioIds to scope; omit to rebuild all.
  */
 export async function rebuildPortfolioSnapshots(portfolioIds?: string[]): Promise<void> {
   const today = new Date().toISOString().split("T")[0]
 
-  let itemsQuery = supabase
-    .from("portfolio_items")
-    .select("portfolio_id, product_id, quantity, purchase_date, purchase_price")
+  let txQuery = supabase
+    .from("transactions")
+    .select("id, portfolio_id, product_id, type, quantity, price, transaction_date, notes, created_at")
   if (portfolioIds?.length) {
-    itemsQuery = itemsQuery.in("portfolio_id", portfolioIds)
+    txQuery = txQuery.in("portfolio_id", portfolioIds)
   }
+  const { data: allTxs } = await txQuery
+  if (!allTxs?.length) return
 
-  const { data: allItems } = await itemsQuery
-  if (!allItems?.length) return
-
-  const productIds = [...new Set(allItems.map((i) => i.product_id))]
+  const productIds = [...new Set(allTxs.map((t) => t.product_id))]
 
   const { data: allPriceSnaps } = await supabase
     .from("price_snapshots")
@@ -35,33 +35,16 @@ export async function rebuildPortfolioSnapshots(portfolioIds?: string[]): Promis
     arr.sort((a, b) => a.date.localeCompare(b.date))
   }
 
-  // Earliest date to compute from
+  // Earliest date to compute from = earliest transaction date overall.
   let earliest: string | null = null
-  for (const it of allItems) {
-    if (it.purchase_date && (earliest === null || it.purchase_date < earliest)) {
-      earliest = it.purchase_date
-    }
-  }
-  if (earliest === null) {
-    for (const arr of Object.values(pricesByProduct)) {
-      if (arr.length && (earliest === null || arr[0].date < earliest)) {
-        earliest = arr[0].date
-      }
+  for (const t of allTxs) {
+    if (earliest === null || t.transaction_date < earliest) {
+      earliest = t.transaction_date
     }
   }
   if (!earliest) return
 
-  const priceOnOrBefore = (productId: string, date: string): number | null => {
-    const arr = pricesByProduct[productId]
-    if (!arr?.length) return null
-    let lo = 0, hi = arr.length - 1, found = -1
-    while (lo <= hi) {
-      const mid = (lo + hi) >>> 1
-      if (arr[mid].date <= date) { found = mid; lo = mid + 1 } else { hi = mid - 1 }
-    }
-    return found >= 0 ? arr[found].price : null
-  }
-
+  // Date list
   const dates: string[] = []
   const cursor = new Date(earliest + "T00:00:00Z")
   const end = new Date(today + "T00:00:00Z")
@@ -70,24 +53,45 @@ export async function rebuildPortfolioSnapshots(portfolioIds?: string[]): Promis
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
 
-  const itemsByPortfolio: Record<string, typeof allItems> = {}
-  for (const it of allItems) {
-    ;(itemsByPortfolio[it.portfolio_id] ??= []).push(it)
+  const priceOnOrBefore = (productId: string, date: string): number | null => {
+    const arr = pricesByProduct[productId]
+    if (!arr?.length) return null
+    let lo = 0,
+      hi = arr.length - 1,
+      found = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1
+      if (arr[mid].date <= date) {
+        found = mid
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
+    }
+    return found >= 0 ? arr[found].price : null
+  }
+
+  // Group transactions by (portfolio_id, product_id).
+  const byPortfolioProduct: Record<string, Record<string, Transaction[]>> = {}
+  for (const t of allTxs as Transaction[]) {
+    ;((byPortfolioProduct[t.portfolio_id] ??= {})[t.product_id] ??= []).push(t)
   }
 
   const rows: Array<{ portfolio_id: string; total_value: number; snapshot_date: string }> = []
 
   for (const date of dates) {
-    for (const [portfolio_id, pItems] of Object.entries(itemsByPortfolio)) {
+    for (const [portfolio_id, productMap] of Object.entries(byPortfolioProduct)) {
       let total = 0
-      let anyOwned = false
-      for (const it of pItems) {
-        if (it.purchase_date && it.purchase_date > date) continue
-        anyOwned = true
-        const market = priceOnOrBefore(it.product_id, date)
-        total += (market ?? Number(it.purchase_price)) * it.quantity
+      let anyHeld = false
+      for (const [product_id, productTxs] of Object.entries(productMap)) {
+        const h = computeHoldingsAsOf(productTxs, date)
+        if (h.netQty <= 0) continue
+        anyHeld = true
+        const market = priceOnOrBefore(product_id, date)
+        const perUnit = market ?? h.avgCostRemaining
+        total += h.netQty * perUnit
       }
-      if (anyOwned) rows.push({ portfolio_id, total_value: total, snapshot_date: date })
+      if (anyHeld) rows.push({ portfolio_id, total_value: total, snapshot_date: date })
     }
   }
 

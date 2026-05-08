@@ -1,30 +1,30 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowDown, ArrowLeft, ArrowUp, PackageOpen, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, PackageOpen, Trash2, Package } from "lucide-react"
 import { Portfolio, PortfolioItem } from "@/lib/supabase"
 import { cn, formatCurrency, formatPercent } from "@/lib/utils"
 
 type SortKey =
   | "product"
   | "quantity"
-  | "purchase_date"
-  | "purchase_price"
+  | "avg_cost"
   | "current"
-  | "gain"
-  | "notes"
+  | "unrealized"
+  | "realized"
 
-type EditableField = "purchase_date" | "purchase_price" | "quantity" | "notes"
-
-function itemGainParts(item: PortfolioItem) {
-  const buyTotal = Number(item.purchase_price) * item.quantity
-  const currentPrice = item.product?.current_price ?? Number(item.purchase_price)
-  const currentTotal = currentPrice * item.quantity
-  const gain = currentTotal - buyTotal
-  const gainPct = buyTotal > 0 ? (gain / buyTotal) * 100 : 0
-  return { buyTotal, currentPrice, currentTotal, gain, gainPct }
+function itemMetrics(item: PortfolioItem) {
+  const avgCost = Number(item.purchase_price)
+  const qty = item.quantity
+  const costBasis = avgCost * qty
+  const currentPrice = item.product?.current_price ?? avgCost
+  const currentValue = currentPrice * qty
+  const unrealized = currentValue - costBasis
+  const unrealizedPct = costBasis > 0 ? (unrealized / costBasis) * 100 : 0
+  const realized = Number(item.realized_pnl ?? 0)
+  return { avgCost, qty, costBasis, currentPrice, currentValue, unrealized, unrealizedPct, realized }
 }
 
 function SortIndicator({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
@@ -51,13 +51,6 @@ export default function PortfolioDetailPage() {
   const skipPortfolioNameBlurRef = useRef(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
-  const [editing, setEditing] = useState<{ itemId: string; field: EditableField } | null>(null)
-  const [draft, setDraft] = useState("")
-  const skipItemBlurRef = useRef(false)
-
-  /** When true, Buy price & Current columns show line totals (× qty). Toggle from Qty header. */
-  const [showLineTotals, setShowLineTotals] = useState(false)
-
   async function load() {
     const [pRes, iRes] = await Promise.all([
       fetch(`/api/portfolios/${id}`),
@@ -69,9 +62,7 @@ export default function PortfolioDetailPage() {
     setLoading(false)
   }
 
-  useEffect(() => {
-    load()
-  }, [id])
+  useEffect(() => { load() }, [id])
 
   useEffect(() => {
     if (portfolio && !renamingPortfolio) setNameDraft(portfolio.name)
@@ -85,86 +76,51 @@ export default function PortfolioDetailPage() {
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
-    else {
-      setSortKey(key)
-      setSortDir("asc")
-    }
+    else { setSortKey(key); setSortDir("asc") }
   }
 
   const sortedItems = useMemo(() => {
     const mul = sortDir === "asc" ? 1 : -1
     const rows = [...items]
-    const nullPenalty = sortDir === "asc" ? 1 : -1
-
     rows.sort((ia, ib) => {
+      const ma = itemMetrics(ia), mb = itemMetrics(ib)
       switch (sortKey) {
         case "product": {
           const va = (ia.product?.name ?? ia.product_id).toLowerCase()
           const vb = (ib.product?.name ?? ib.product_id).toLowerCase()
           return va.localeCompare(vb) * mul
         }
-        case "quantity":
-          return (ia.quantity - ib.quantity) * mul
-        case "purchase_price": {
-          const ba = showLineTotals ? itemGainParts(ia).buyTotal : Number(ia.purchase_price)
-          const bb = showLineTotals ? itemGainParts(ib).buyTotal : Number(ib.purchase_price)
-          return (ba - bb) * mul
-        }
-        case "purchase_date": {
-          const ta = ia.purchase_date ? new Date(ia.purchase_date).getTime() : null
-          const tb = ib.purchase_date ? new Date(ib.purchase_date).getTime() : null
-          if (ta == null && tb == null) return 0
-          if (ta == null) return nullPenalty
-          if (tb == null) return -nullPenalty
-          return (ta - tb) * mul
-        }
-        case "current": {
-          const ca = showLineTotals
-            ? itemGainParts(ia).currentTotal
-            : ia.product?.current_price ?? Number(ia.purchase_price)
-          const cb = showLineTotals
-            ? itemGainParts(ib).currentTotal
-            : ib.product?.current_price ?? Number(ib.purchase_price)
-          return (ca - cb) * mul
-        }
-        case "gain":
-          return (itemGainParts(ia).gain - itemGainParts(ib).gain) * mul
-        case "notes":
-          return (ia.notes ?? "").toLowerCase().localeCompare((ib.notes ?? "").toLowerCase()) * mul
-        default:
-          return 0
+        case "quantity": return (ma.qty - mb.qty) * mul
+        case "avg_cost": return (ma.avgCost - mb.avgCost) * mul
+        case "current": return (ma.currentValue - mb.currentValue) * mul
+        case "unrealized": return (ma.unrealized - mb.unrealized) * mul
+        case "realized": return (ma.realized - mb.realized) * mul
+        default: return 0
       }
     })
     return rows
-  }, [items, sortKey, sortDir, showLineTotals])
+  }, [items, sortKey, sortDir])
 
-  async function handleDelete(itemId: string) {
-    if (!confirm("Remove this item from the portfolio?")) return
-    await fetch(`/api/portfolios/${id}/items/${itemId}`, { method: "DELETE" })
-    load()
+  async function handleDelete(productId: string, name: string) {
+    if (!confirm(`Delete all transactions for "${name}"? This cannot be undone.`)) return
+    await fetch(`/api/portfolios/${id}/products/${encodeURIComponent(productId)}`, { method: "DELETE" })
+    setItems((prev) => prev.filter((p) => p.product_id !== productId))
   }
 
   const cancelPortfolioRename = () => {
     skipPortfolioNameBlurRef.current = true
     if (portfolio) setNameDraft(portfolio.name)
     setRenamingPortfolio(false)
-    requestAnimationFrame(() => {
-      skipPortfolioNameBlurRef.current = false
-    })
+    requestAnimationFrame(() => { skipPortfolioNameBlurRef.current = false })
   }
 
   const commitPortfolioName = async () => {
     if (!portfolio || !id) return
     const trimmed = nameDraft.trim()
     if (!trimmed) {
-      setNameDraft(portfolio.name)
-      setRenamingPortfolio(false)
-      return
+      setNameDraft(portfolio.name); setRenamingPortfolio(false); return
     }
-    if (trimmed === portfolio.name) {
-      setRenamingPortfolio(false)
-      return
-    }
+    if (trimmed === portfolio.name) { setRenamingPortfolio(false); return }
     try {
       const res = await fetch(`/api/portfolios/${id}`, {
         method: "PATCH",
@@ -173,132 +129,18 @@ export default function PortfolioDetailPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error ?? "Failed to rename")
-      setPortfolio(data)
-      setRenamingPortfolio(false)
+      setPortfolio(data); setRenamingPortfolio(false)
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to rename portfolio")
-      setNameDraft(portfolio.name)
-      setRenamingPortfolio(false)
+      setNameDraft(portfolio.name); setRenamingPortfolio(false)
     }
   }
 
-  const cancelItemEdit = useCallback(() => {
-    skipItemBlurRef.current = true
-    setEditing(null)
-    setDraft("")
-    requestAnimationFrame(() => {
-      skipItemBlurRef.current = false
-    })
-  }, [])
-
-  const startItemEdit = (item: PortfolioItem, field: EditableField) => {
-    setEditing({ itemId: item.id, field })
-    switch (field) {
-      case "purchase_date":
-        setDraft(item.purchase_date ? item.purchase_date.slice(0, 10) : "")
-        break
-      case "purchase_price":
-        setDraft(String(Number(item.purchase_price)))
-        break
-      case "quantity":
-        setDraft(String(item.quantity))
-        break
-      case "notes":
-        setDraft(item.notes ?? "")
-        break
-    }
-  }
-
-  const commitItemEdit = async (itemId: string, field: EditableField, raw: string) => {
-    if (skipItemBlurRef.current || !id) return
-    const item = items.find((i) => i.id === itemId)
-    if (!item) {
-      cancelItemEdit()
-      return
-    }
-
-    let patch: Partial<PortfolioItem & { purchase_price: number }> | null = null
-
-    switch (field) {
-      case "purchase_date": {
-        const t = raw.trim()
-        const nextVal = t === "" ? null : t
-        if (nextVal && !/^\d{4}-\d{2}-\d{2}$/.test(nextVal)) {
-          alert("Use purchase date format YYYY-MM-DD")
-          return
-        }
-        const curr = item.purchase_date ? item.purchase_date.slice(0, 10) : ""
-        if ((nextVal ?? "") === curr) {
-          cancelItemEdit()
-          return
-        }
-        patch = { purchase_date: nextVal }
-        break
-      }
-      case "purchase_price": {
-        const n = Number.parseFloat(raw.trim())
-        if (!Number.isFinite(n) || n < 0) {
-          alert("Enter a valid buy price.")
-          return
-        }
-        if (n === Number(item.purchase_price)) {
-          cancelItemEdit()
-          return
-        }
-        patch = { purchase_price: n }
-        break
-      }
-      case "quantity": {
-        const q = Number.parseInt(raw.trim(), 10)
-        if (!Number.isFinite(q) || q < 1) {
-          alert("Quantity must be a whole number of at least 1.")
-          return
-        }
-        if (q === item.quantity) {
-          cancelItemEdit()
-          return
-        }
-        patch = { quantity: q }
-        break
-      }
-      case "notes": {
-        const n = raw.trim() === "" ? null : raw.trim()
-        if ((item.notes ?? null) === n) {
-          cancelItemEdit()
-          return
-        }
-        patch = { notes: n }
-        break
-      }
-    }
-
-    if (!patch) {
-      cancelItemEdit()
-      return
-    }
-
-    try {
-      const res = await fetch(`/api/portfolios/${id}/items/${itemId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error ?? "Update failed")
-      setItems((prev) => prev.map((i) => (i.id === itemId ? data : i)))
-      cancelItemEdit()
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to update item")
-    }
-  }
-
-  const totalCost = items.reduce((sum, i) => sum + Number(i.purchase_price) * i.quantity, 0)
-  const totalValue = items.reduce(
-    (sum, i) => sum + (i.product?.current_price ?? Number(i.purchase_price)) * i.quantity,
-    0
-  )
-  const totalGain = totalValue - totalCost
-  const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0
+  const totalCost = items.reduce((s, i) => s + itemMetrics(i).costBasis, 0)
+  const totalValue = items.reduce((s, i) => s + itemMetrics(i).currentValue, 0)
+  const totalRealized = items.reduce((s, i) => s + itemMetrics(i).realized, 0)
+  const totalUnrealized = totalValue - totalCost
+  const totalUnrealizedPct = totalCost > 0 ? (totalUnrealized / totalCost) * 100 : 0
 
   if (loading) {
     return (
@@ -332,19 +174,10 @@ export default function PortfolioDetailPage() {
               type="text"
               value={nameDraft}
               onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={() => {
-                if (skipPortfolioNameBlurRef.current) return
-                void commitPortfolioName()
-              }}
+              onBlur={() => { if (skipPortfolioNameBlurRef.current) return; void commitPortfolioName() }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  void commitPortfolioName()
-                }
-                if (e.key === "Escape") {
-                  e.preventDefault()
-                  cancelPortfolioRename()
-                }
+                if (e.key === "Enter") { e.preventDefault(); void commitPortfolioName() }
+                if (e.key === "Escape") { e.preventDefault(); cancelPortfolioRename() }
               }}
               className="text-2xl font-bold w-full max-w-xl px-2 py-1 rounded-md border border-input bg-background"
             />
@@ -352,10 +185,7 @@ export default function PortfolioDetailPage() {
             <h1
               className="text-2xl font-bold truncate cursor-default"
               title="Double-click to rename"
-              onDoubleClick={() => {
-                setNameDraft(portfolio.name)
-                setRenamingPortfolio(true)
-              }}
+              onDoubleClick={() => { setNameDraft(portfolio.name); setRenamingPortfolio(true) }}
             >
               {portfolio.name}
             </h1>
@@ -367,22 +197,28 @@ export default function PortfolioDetailPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-3">
         <div className="border border-border rounded-lg p-4 bg-card">
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Value</p>
-          <p className="text-2xl font-bold mt-1">{formatCurrency(totalValue)}</p>
+          <p className="text-xl font-bold mt-1">{formatCurrency(totalValue)}</p>
         </div>
         <div className="border border-border rounded-lg p-4 bg-card">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Cost</p>
-          <p className="text-2xl font-bold mt-1">{formatCurrency(totalCost)}</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Cost Basis</p>
+          <p className="text-xl font-bold mt-1">{formatCurrency(totalCost)}</p>
         </div>
         <div className="border border-border rounded-lg p-4 bg-card">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">Gain / Loss</p>
-          <p className={`text-2xl font-bold mt-1 ${totalGain >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-            {formatCurrency(totalGain)}
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Unrealized P/L</p>
+          <p className={`text-xl font-bold mt-1 ${totalUnrealized >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+            {formatCurrency(totalUnrealized)}
           </p>
-          <p className={`text-sm ${totalGain >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-            {formatPercent(totalGainPct)}
+          <p className={`text-xs ${totalUnrealized >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+            {formatPercent(totalUnrealizedPct)}
+          </p>
+        </div>
+        <div className="border border-border rounded-lg p-4 bg-card">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Realized P/L</p>
+          <p className={`text-xl font-bold mt-1 ${totalRealized >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+            {formatCurrency(totalRealized)}
           </p>
         </div>
       </div>
@@ -394,15 +230,13 @@ export default function PortfolioDetailPage() {
           <p className="font-medium">No items yet</p>
           <p className="text-sm text-muted-foreground mt-1">
             Go to{" "}
-            <Link href="/search" className="underline underline-offset-2">
-              Search
-            </Link>{" "}
+            <Link href="/search" className="underline underline-offset-2">Search</Link>{" "}
             to add sealed products
           </p>
         </div>
       ) : (
         <div className="border border-border rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
+          <table className="w-full text-sm min-w-[800px]">
             <thead>
               <tr className="border-b border-border bg-muted/50">
                 <th className="text-left px-4 py-3">
@@ -412,73 +246,33 @@ export default function PortfolioDetailPage() {
                   </button>
                 </th>
                 <th className="text-right px-4 py-3">
-                  <div className="flex justify-end items-center gap-1">
-                    <button
-                      type="button"
-                      title={showLineTotals ? "Showing line totals for buy & current — click for per-unit" : "Click to show buy & current as line totals (× qty)"}
-                      onClick={() => setShowLineTotals((v) => !v)}
-                      className={cn(
-                        headerBtn,
-                        "rounded-md px-2 py-1 -my-0.5 transition-shadow",
-                        showLineTotals &&
-                          "text-cyan-600 dark:text-cyan-400 ring-1 ring-cyan-500/50 bg-cyan-500/10 shadow-[0_0_16px_rgba(6,182,212,0.35)]"
-                      )}
-                    >
-                      Qty
-                      {showLineTotals ? <span className="text-[10px] font-normal opacity-80 ml-0.5">total</span> : null}
-                    </button>
-                    <button
-                      type="button"
-                      className="p-0.5 rounded hover:bg-accent/80 text-muted-foreground hover:text-foreground"
-                      aria-label="Sort by quantity"
-                      onClick={() => toggleSort("quantity")}
-                    >
-                      <SortIndicator active={sortKey === "quantity"} dir={sortDir} />
-                    </button>
-                  </div>
-                </th>
-                <th className="text-left px-4 py-3">
-                  <button type="button" className={headerBtn} onClick={() => toggleSort("purchase_date")}>
-                    Purchase date
-                    <SortIndicator active={sortKey === "purchase_date"} dir={sortDir} />
+                  <button type="button" className={headerBtn} onClick={() => toggleSort("quantity")}>
+                    Qty
+                    <SortIndicator active={sortKey === "quantity"} dir={sortDir} />
                   </button>
                 </th>
                 <th className="text-right px-4 py-3">
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      className={cn(headerBtn, showLineTotals && "text-cyan-700/90 dark:text-cyan-400/90")}
-                      onClick={() => toggleSort("purchase_price")}
-                    >
-                      {showLineTotals ? "Buy total" : "Buy price"}
-                      <SortIndicator active={sortKey === "purchase_price"} dir={sortDir} />
-                    </button>
-                  </div>
+                  <button type="button" className={headerBtn} onClick={() => toggleSort("avg_cost")}>
+                    Avg cost
+                    <SortIndicator active={sortKey === "avg_cost"} dir={sortDir} />
+                  </button>
                 </th>
                 <th className="text-right px-4 py-3">
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      className={cn(headerBtn, showLineTotals && "text-cyan-700/90 dark:text-cyan-400/90")}
-                      onClick={() => toggleSort("current")}
-                    >
-                      {showLineTotals ? "Current total" : "Current"}
-                      <SortIndicator active={sortKey === "current"} dir={sortDir} />
-                    </button>
-                  </div>
+                  <button type="button" className={headerBtn} onClick={() => toggleSort("current")}>
+                    Value
+                    <SortIndicator active={sortKey === "current"} dir={sortDir} />
+                  </button>
                 </th>
                 <th className="text-right px-4 py-3">
-                  <div className="flex justify-end">
-                    <button type="button" className={headerBtn} onClick={() => toggleSort("gain")}>
-                      Gain / Loss
-                      <SortIndicator active={sortKey === "gain"} dir={sortDir} />
-                    </button>
-                  </div>
+                  <button type="button" className={headerBtn} onClick={() => toggleSort("unrealized")}>
+                    Unrealized
+                    <SortIndicator active={sortKey === "unrealized"} dir={sortDir} />
+                  </button>
                 </th>
-                <th className="text-left px-4 py-3 max-w-[200px]">
-                  <button type="button" className={headerBtn} onClick={() => toggleSort("notes")}>
-                    Notes
-                    <SortIndicator active={sortKey === "notes"} dir={sortDir} />
+                <th className="text-right px-4 py-3">
+                  <button type="button" className={headerBtn} onClick={() => toggleSort("realized")}>
+                    Realized
+                    <SortIndicator active={sortKey === "realized"} dir={sortDir} />
                   </button>
                 </th>
                 <th className="px-4 py-3 w-10" />
@@ -486,14 +280,9 @@ export default function PortfolioDetailPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {sortedItems.map((item) => {
-                const { buyTotal, currentPrice, currentTotal, gain, gainPct } = itemGainParts(item)
-                const isEditingQty = editing?.itemId === item.id && editing.field === "quantity"
-                const isEditingPrice = editing?.itemId === item.id && editing.field === "purchase_price"
-                const isEditingDate = editing?.itemId === item.id && editing.field === "purchase_date"
-                const isEditingNotes = editing?.itemId === item.id && editing.field === "notes"
-
+                const m = itemMetrics(item)
                 return (
-                  <tr key={item.id} className="hover:bg-accent/20 transition-colors group">
+                  <tr key={item.product_id} className="hover:bg-accent/20 transition-colors group">
                     <td className="px-4 py-3">
                       <Link
                         href={`/products/${encodeURIComponent(item.product_id)}`}
@@ -508,7 +297,9 @@ export default function PortfolioDetailPage() {
                               className="w-10 h-10 object-cover"
                               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
                             />
-                          ) : null}
+                          ) : (
+                            <Package size={16} className="text-muted-foreground" />
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p className="font-medium group-hover/product:underline underline-offset-2 truncate">
@@ -518,126 +309,25 @@ export default function PortfolioDetailPage() {
                         </div>
                       </Link>
                     </td>
-                    <td
-                      className="px-4 py-3 text-right cursor-pointer"
-                      onClick={() => !isEditingQty && startItemEdit(item, "quantity")}
-                    >
-                      {isEditingQty ? (
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={draft}
-                          onChange={(e) => setDraft(e.target.value)}
-                          onBlur={() => void commitItemEdit(item.id, "quantity", draft)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              e.preventDefault()
-                              cancelItemEdit()
-                            }
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur()
-                          }}
-                          className="w-20 px-2 py-1 rounded border border-input bg-background text-right text-sm ml-auto block"
-                          autoFocus
-                        />
-                      ) : (
-                        item.quantity
-                      )}
-                    </td>
-                    <td
-                      className="px-4 py-3 text-left cursor-pointer whitespace-nowrap"
-                      onClick={() => !isEditingDate && startItemEdit(item, "purchase_date")}
-                    >
-                      {isEditingDate ? (
-                        <input
-                          type="date"
-                          value={draft}
-                          onChange={(e) => setDraft(e.target.value)}
-                          onBlur={() => void commitItemEdit(item.id, "purchase_date", draft)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              e.preventDefault()
-                              cancelItemEdit()
-                            }
-                          }}
-                          className="px-2 py-1 rounded border border-input bg-background text-sm"
-                          autoFocus
-                        />
-                      ) : item.purchase_date ? (
-                        new Date(item.purchase_date).toLocaleDateString()
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td
-                      className="px-4 py-3 text-right cursor-pointer"
-                      onClick={() => !isEditingPrice && startItemEdit(item, "purchase_price")}
-                    >
-                      {isEditingPrice ? (
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={draft}
-                          onChange={(e) => setDraft(e.target.value)}
-                          onBlur={() => void commitItemEdit(item.id, "purchase_price", draft)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              e.preventDefault()
-                              cancelItemEdit()
-                            }
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur()
-                          }}
-                          className="w-28 px-2 py-1 rounded border border-input bg-background text-right text-sm ml-auto block"
-                          autoFocus
-                        />
-                      ) : showLineTotals ? (
-                        formatCurrency(buyTotal)
-                      ) : (
-                        formatCurrency(Number(item.purchase_price))
-                      )}
-                    </td>
+                    <td className="px-4 py-3 text-right">{m.qty}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrency(m.avgCost)}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrency(m.currentValue)}</td>
                     <td className="px-4 py-3 text-right">
-                      {currentPrice
-                        ? formatCurrency(showLineTotals ? currentTotal : currentPrice)
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={gain >= 0 ? "text-emerald-500" : "text-red-500"}>
-                        {formatCurrency(gain)}
+                      <span className={cn(m.unrealized >= 0 ? "text-emerald-500" : "text-red-500")}>
+                        {formatCurrency(m.unrealized)}
                         <br />
-                        <span className="text-xs">{formatPercent(gainPct)}</span>
+                        <span className="text-xs">{formatPercent(m.unrealizedPct)}</span>
                       </span>
                     </td>
-                    <td
-                      className="px-4 py-3 max-w-[200px] cursor-pointer align-top"
-                      title={item.notes ?? undefined}
-                      onClick={() => !isEditingNotes && startItemEdit(item, "notes")}
-                    >
-                      {isEditingNotes ? (
-                        <input
-                          type="text"
-                          value={draft}
-                          onChange={(e) => setDraft(e.target.value)}
-                          onBlur={() => void commitItemEdit(item.id, "notes", draft)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              e.preventDefault()
-                              cancelItemEdit()
-                            }
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur()
-                          }}
-                          className="w-full min-w-[120px] px-2 py-1 rounded border border-input bg-background text-sm"
-                          autoFocus
-                        />
-                      ) : (
-                        <span className="line-clamp-2 break-words">{item.notes ?? "—"}</span>
-                      )}
+                    <td className="px-4 py-3 text-right">
+                      <span className={cn(m.realized >= 0 ? "text-emerald-500" : "text-red-500")}>
+                        {formatCurrency(m.realized)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        onClick={() => handleDelete(item.id)}
+                        onClick={() => handleDelete(item.product_id, item.product?.name ?? item.product_id)}
                         className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
                       >
                         <Trash2 size={14} />

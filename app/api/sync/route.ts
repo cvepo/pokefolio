@@ -19,14 +19,14 @@ async function syncPrices() {
   const apiKey = process.env.JUSTTCG_API_KEY
   if (!apiKey) return NextResponse.json({ error: "API key not configured" }, { status: 500 })
 
-  // Get all distinct products in any portfolio
-  const { data: items, error: itemsError } = await supabase
-    .from("portfolio_items")
+  // Get all distinct products held across any portfolio (from transactions).
+  const { data: txs, error: itemsError } = await supabase
+    .from("transactions")
     .select("product_id")
 
   if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 500 })
 
-  const productIds = [...new Set((items ?? []).map((i) => i.product_id))]
+  const productIds = [...new Set((txs ?? []).map((t) => t.product_id))]
   if (productIds.length === 0) {
     return NextResponse.json({ ok: true, message: "No products to sync", synced: 0 })
   }
@@ -91,19 +91,20 @@ async function syncPrices() {
   )
 
   // Backfill historical price snapshots for any product that lacks history.
-  // Use the earliest purchase_date among items holding that product as the cutoff.
-  const { data: itemsWithDates } = await supabase
-    .from("portfolio_items")
-    .select("product_id, purchase_date")
+  // Use the earliest 'buy' transaction_date for that product as the cutoff.
+  const { data: buyTxs } = await supabase
+    .from("transactions")
+    .select("product_id, transaction_date")
+    .eq("type", "buy")
     .in("product_id", productIds)
 
   const earliestByProduct: Record<string, string | null> = {}
-  for (const it of itemsWithDates ?? []) {
-    const curr = earliestByProduct[it.product_id]
+  for (const t of buyTxs ?? []) {
+    const curr = earliestByProduct[t.product_id]
     if (curr === undefined) {
-      earliestByProduct[it.product_id] = it.purchase_date
-    } else if (it.purchase_date && (curr === null || new Date(it.purchase_date) < new Date(curr))) {
-      earliestByProduct[it.product_id] = it.purchase_date
+      earliestByProduct[t.product_id] = t.transaction_date
+    } else if (curr === null || t.transaction_date < curr) {
+      earliestByProduct[t.product_id] = t.transaction_date
     }
   }
 

@@ -103,14 +103,15 @@ export default function SearchPage() {
     if (!addModal || !activePortfolioId) return
     setAdding(true)
 
-    await fetch(`/api/portfolios/${activePortfolioId}/items`, {
+    await fetch(`/api/portfolios/${activePortfolioId}/transactions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         product_id: addModal.product.id,
+        type: "buy",
         quantity: parseInt(qty),
-        purchase_price: parseFloat(buyPrice),
-        purchase_date: buyDate || null,
+        price: parseFloat(buyPrice),
+        transaction_date: buyDate || new Date().toISOString().split("T")[0],
       }),
     })
 

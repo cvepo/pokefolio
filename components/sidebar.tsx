@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, FolderOpen, Search, Settings, LogOut, Moon, Sun } from "lucide-react"
+import { LayoutDashboard, FolderOpen, Search, Settings, LogOut, Moon, Sun, BarChart3 } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
@@ -10,6 +10,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolios", label: "Portfolios", icon: FolderOpen },
   { href: "/search", label: "Search", icon: Search },
+  { href: "/data", label: "Data", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
