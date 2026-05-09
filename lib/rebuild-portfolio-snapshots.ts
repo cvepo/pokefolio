@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import { computeHoldingsAsOf } from "@/lib/holdings"
+import { buildPriceIndex, priceOnOrBefore, daterange } from "@/lib/price-lookup"
 import type { Transaction } from "@/lib/supabase"
 
 /**
@@ -25,15 +26,7 @@ export async function rebuildPortfolioSnapshots(portfolioIds?: string[]): Promis
     .select("product_id, price, snapshot_date")
     .in("product_id", productIds)
 
-  // Index prices: product_id → sorted [{ date, price }]
-  const pricesByProduct: Record<string, { date: string; price: number }[]> = {}
-  for (const snap of allPriceSnaps ?? []) {
-    const arr = pricesByProduct[snap.product_id] ?? (pricesByProduct[snap.product_id] = [])
-    arr.push({ date: snap.snapshot_date, price: Number(snap.price) })
-  }
-  for (const arr of Object.values(pricesByProduct)) {
-    arr.sort((a, b) => a.date.localeCompare(b.date))
-  }
+  const pricesByProduct = buildPriceIndex(allPriceSnaps ?? [])
 
   // Earliest date to compute from = earliest transaction date overall.
   let earliest: string | null = null
@@ -44,32 +37,7 @@ export async function rebuildPortfolioSnapshots(portfolioIds?: string[]): Promis
   }
   if (!earliest) return
 
-  // Date list
-  const dates: string[] = []
-  const cursor = new Date(earliest + "T00:00:00Z")
-  const end = new Date(today + "T00:00:00Z")
-  while (cursor <= end) {
-    dates.push(cursor.toISOString().split("T")[0])
-    cursor.setUTCDate(cursor.getUTCDate() + 1)
-  }
-
-  const priceOnOrBefore = (productId: string, date: string): number | null => {
-    const arr = pricesByProduct[productId]
-    if (!arr?.length) return null
-    let lo = 0,
-      hi = arr.length - 1,
-      found = -1
-    while (lo <= hi) {
-      const mid = (lo + hi) >>> 1
-      if (arr[mid].date <= date) {
-        found = mid
-        lo = mid + 1
-      } else {
-        hi = mid - 1
-      }
-    }
-    return found >= 0 ? arr[found].price : null
-  }
+  const dates = daterange(earliest, today)
 
   // Group transactions by (portfolio_id, product_id).
   const byPortfolioProduct: Record<string, Record<string, Transaction[]>> = {}
@@ -87,7 +55,7 @@ export async function rebuildPortfolioSnapshots(portfolioIds?: string[]): Promis
         const h = computeHoldingsAsOf(productTxs, date)
         if (h.netQty <= 0) continue
         anyHeld = true
-        const market = priceOnOrBefore(product_id, date)
+        const market = priceOnOrBefore(pricesByProduct, product_id, date)
         const perUnit = market ?? h.avgCostRemaining
         total += h.netQty * perUnit
       }

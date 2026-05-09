@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { TrendingUp, TrendingDown, FolderOpen } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
@@ -8,6 +8,7 @@ import { Portfolio, PortfolioSnapshot } from "@/lib/supabase"
 import { formatCurrency, formatPercent } from "@/lib/utils"
 
 type Timeframe = "7D" | "1M" | "3M" | "6M" | "MAX"
+type ChartMode = "actual" | "projected"
 
 const TIMEFRAME_DAYS: Record<Timeframe, number> = {
   "7D": 7,
@@ -26,7 +27,9 @@ export default function DashboardPage() {
   const [portfolios, setPortfolios] = useState<PortfolioWithValue[]>([])
   const [allSnapshots, setAllSnapshots] = useState<PortfolioSnapshot[]>([])
   const [timeframe, setTimeframe] = useState<Timeframe>("1M")
+  const [chartMode, setChartMode] = useState<ChartMode>("actual")
   const [loading, setLoading] = useState(true)
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -46,7 +49,9 @@ export default function DashboardPage() {
         ),
         Promise.all(
           portfoliosList.map((p) =>
-            fetch(`/api/dashboard/snapshots?portfolioId=${p.id}`).then((r) => r.json())
+            // Initial load uses chartMode (which starts as "actual"); the dedicated
+            // toggle effect below re-fetches when the user flips the mode.
+            fetch(`/api/dashboard/snapshots?portfolioId=${p.id}&mode=${chartMode}`).then((r) => r.json())
           )
         ),
       ])
@@ -72,7 +77,28 @@ export default function DashboardPage() {
       setLoading(false)
     }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Refetch snapshots when chartMode toggles (skip initial mount — handled by load()).
+  const isInitialMount = useRef(true)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+    if (portfolios.length === 0) return
+    setSnapshotsLoading(true)
+    Promise.all(
+      portfolios.map((p) =>
+        fetch(`/api/dashboard/snapshots?portfolioId=${p.id}&mode=${chartMode}`).then((r) => r.json())
+      )
+    ).then((results) => {
+      setAllSnapshots(results.flat())
+      setSnapshotsLoading(false)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartMode])
 
   // Aggregate snapshots across all portfolios by date
   const aggregatedByDate: Record<string, number> = {}
@@ -178,21 +204,52 @@ export default function DashboardPage() {
 
           {/* Chart */}
           <div className="border border-border rounded-xl p-5 bg-card">
-            <div className="flex gap-1 mb-5">
-              {(["7D", "1M", "3M", "6M", "MAX"] as Timeframe[]).map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    timeframe === tf
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
+            <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+              <div className="flex gap-1">
+                {(["7D", "1M", "3M", "6M", "MAX"] as Timeframe[]).map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                      timeframe === tf
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+              <div
+                className="flex gap-1 p-0.5 rounded-md border border-border bg-background/50"
+                title={
+                  chartMode === "projected"
+                    ? "Showing current holdings as if always held — pure market movement"
+                    : "Showing actual portfolio value (changes with buys and sells)"
+                }
+              >
+                {(["actual", "projected"] as ChartMode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setChartMode(m)}
+                    disabled={snapshotsLoading}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors capitalize disabled:opacity-50 ${
+                      chartMode === m
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {chartMode === "projected" && (
+              <p className="text-xs text-muted-foreground mb-3 -mt-2">
+                Projected: applies current holdings to historical prices (no buy/sell impact).
+              </p>
+            )}
 
             {chartData.length < 2 ? (
               <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">
