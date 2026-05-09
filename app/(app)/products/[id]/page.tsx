@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Package, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 import { Portfolio, Product, PriceSnapshot, Transaction } from "@/lib/supabase"
-import { formatCurrency, formatPercent } from "@/lib/utils"
+import { formatCurrency, formatPercent, formatSpan } from "@/lib/utils"
 import { useActivePortfolio } from "@/lib/use-active-portfolio"
 import { computeHoldings } from "@/lib/holdings"
 
@@ -242,7 +242,12 @@ export default function ProductPage() {
           <div className={`flex items-center gap-1.5 text-sm font-medium ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
             {isPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
             <span>{isPositive ? "+" : ""}{formatCurrency(priceChange)} ({isPositive ? "+" : ""}{priceChangePct.toFixed(2)}%)</span>
-            <span className="text-muted-foreground font-normal">vs {timeframe} ago</span>
+            <span className="text-muted-foreground font-normal">
+              vs{" "}
+              {timeframe === "MAX" && filteredSnapshots.length >= 2
+                ? `${formatSpan(filteredSnapshots[0].snapshot_date, filteredSnapshots[filteredSnapshots.length - 1].snapshot_date)} ago`
+                : `${timeframe} ago`}
+            </span>
           </div>
         )}
       </div>

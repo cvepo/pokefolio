@@ -11,6 +11,7 @@ type SortKey =
   | "product"
   | "quantity"
   | "avg_cost"
+  | "market"
   | "current"
   | "unrealized"
   | "realized"
@@ -43,8 +44,8 @@ export default function PortfolioDetailPage() {
   const [items, setItems] = useState<PortfolioItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [sortKey, setSortKey] = useState<SortKey>("product")
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
+  const [sortKey, setSortKey] = useState<SortKey>("current")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
   const [renamingPortfolio, setRenamingPortfolio] = useState(false)
   const [nameDraft, setNameDraft] = useState("")
@@ -92,6 +93,7 @@ export default function PortfolioDetailPage() {
         }
         case "quantity": return (ma.qty - mb.qty) * mul
         case "avg_cost": return (ma.avgCost - mb.avgCost) * mul
+        case "market": return (ma.currentPrice - mb.currentPrice) * mul
         case "current": return (ma.currentValue - mb.currentValue) * mul
         case "unrealized": return (ma.unrealized - mb.unrealized) * mul
         case "realized": return (ma.realized - mb.realized) * mul
@@ -258,6 +260,12 @@ export default function PortfolioDetailPage() {
                   </button>
                 </th>
                 <th className="text-right px-4 py-3">
+                  <button type="button" className={headerBtn} onClick={() => toggleSort("market")}>
+                    Market price
+                    <SortIndicator active={sortKey === "market"} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="text-right px-4 py-3">
                   <button type="button" className={headerBtn} onClick={() => toggleSort("current")}>
                     Value
                     <SortIndicator active={sortKey === "current"} dir={sortDir} />
@@ -311,6 +319,7 @@ export default function PortfolioDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-right">{m.qty}</td>
                     <td className="px-4 py-3 text-right">{formatCurrency(m.avgCost)}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrency(m.currentPrice)}</td>
                     <td className="px-4 py-3 text-right">{formatCurrency(m.currentValue)}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={cn(m.unrealized >= 0 ? "text-emerald-500" : "text-red-500")}>

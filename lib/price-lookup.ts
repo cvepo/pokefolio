@@ -40,6 +40,42 @@ export function priceOnOrBefore(idx: PriceIndex, productId: string, date: string
   return found >= 0 ? arr[found].price : null
 }
 
+/**
+ * Page through price_snapshots in 1000-row chunks to bypass the Supabase
+ * default row cap. Pure read; safe to call any number of times.
+ */
+type PriceSnapRow = { product_id: string; price: number | string; snapshot_date: string }
+type SbClient = {
+  from: (t: string) => {
+    select: (cols: string) => {
+      in: (col: string, vals: string[]) => {
+        range: (a: number, b: number) => PromiseLike<{ data: PriceSnapRow[] | null }>
+      }
+    }
+  }
+}
+export async function fetchAllPriceSnapshots(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  productIds: string[]
+): Promise<PriceSnapRow[]> {
+  if (!productIds.length) return []
+  const PAGE = 1000
+  const all: PriceSnapRow[] = []
+  const client = supabase as SbClient
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await client
+      .from("price_snapshots")
+      .select("product_id, price, snapshot_date")
+      .in("product_id", productIds)
+      .range(from, from + PAGE - 1)
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < PAGE) break
+  }
+  return all
+}
+
 /** Build a contiguous list of YYYY-MM-DD strings from `start` to `end` (inclusive). */
 export function daterange(start: string, end: string): string[] {
   const dates: string[] = []

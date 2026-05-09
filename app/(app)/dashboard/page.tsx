@@ -2,10 +2,22 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { TrendingUp, TrendingDown, FolderOpen } from "lucide-react"
+import { TrendingUp, TrendingDown, FolderOpen, Package } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 import { Portfolio, PortfolioSnapshot } from "@/lib/supabase"
-import { formatCurrency, formatPercent } from "@/lib/utils"
+import { formatCurrency, formatPercent, formatSpan } from "@/lib/utils"
+
+type Mover = {
+  product_id: string
+  name: string
+  set_name: string
+  tcgplayer_id: string | null
+  current_price: number
+  start_price: number
+  change_per_unit: number
+  change_pct: number
+  qty_held: number
+}
 
 type Timeframe = "7D" | "1M" | "3M" | "6M" | "MAX"
 type ChartMode = "actual" | "projected"
@@ -30,6 +42,8 @@ export default function DashboardPage() {
   const [chartMode, setChartMode] = useState<ChartMode>("actual")
   const [loading, setLoading] = useState(true)
   const [snapshotsLoading, setSnapshotsLoading] = useState(false)
+  const [movers, setMovers] = useState<{ winners: Mover[]; losers: Mover[] }>({ winners: [], losers: [] })
+  const [moversLoading, setMoversLoading] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -79,6 +93,18 @@ export default function DashboardPage() {
     load()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Fetch movers whenever the timeframe changes (or on mount).
+  useEffect(() => {
+    setMoversLoading(true)
+    fetch(`/api/dashboard/movers?timeframe=${timeframe}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setMovers({ winners: data?.winners ?? [], losers: data?.losers ?? [] })
+        setMoversLoading(false)
+      })
+      .catch(() => setMoversLoading(false))
+  }, [timeframe])
 
   // Refetch snapshots when chartMode toggles (skip initial mount — handled by load()).
   const isInitialMount = useRef(true)
@@ -190,7 +216,9 @@ export default function DashboardPage() {
                     ) : (
                       <> (—%)</>
                     )}{" "}
-                    · {timeframe}
+                    · {timeframe === "MAX" && filteredDates.length >= 2
+                      ? `MAX (${formatSpan(filteredDates[0], filteredDates[filteredDates.length - 1])})`
+                      : timeframe}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">Based on synced portfolio history in this range.</p>
@@ -277,31 +305,92 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Portfolio cards */}
+          {/* Biggest movers (responds to the chart timeframe selector above) */}
           <div>
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Portfolios</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {portfolios.map((p) => {
-                const gain = p.latestValue - p.costBasis
-                const gainPct = p.costBasis > 0 ? (gain / p.costBasis) * 100 : 0
-                return (
-                  <Link
-                    key={p.id}
-                    href={`/portfolios/${p.id}`}
-                    className="border border-border rounded-lg p-4 bg-card hover:bg-accent/30 transition-colors"
-                  >
-                    <p className="font-semibold text-sm">{p.name}</p>
-                    <p className="text-xl font-bold mt-2">{formatCurrency(p.latestValue)}</p>
-                    <p className={`text-sm font-medium mt-0.5 ${gain >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                      {gain >= 0 ? "+" : ""}{formatCurrency(gain)} ({formatPercent(gainPct)})
-                    </p>
-                  </Link>
-                )
-              })}
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Biggest movers
+              </h2>
+              <span className="text-xs text-muted-foreground">over {timeframe}</span>
             </div>
+
+            {moversLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-28 rounded-lg bg-muted animate-pulse" />
+                ))}
+              </div>
+            ) : movers.winners.length === 0 && movers.losers.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                Not enough price history yet to compute movers.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {movers.winners.length > 0 && (
+                  <>
+                    <p className="text-xs font-medium text-emerald-500 uppercase tracking-wide flex items-center gap-1.5">
+                      <TrendingUp size={12} /> Winners
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {movers.winners.map((m) => (
+                        <MoverCard key={m.product_id} mover={m} />
+                      ))}
+                    </div>
+                  </>
+                )}
+                {movers.losers.length > 0 && (
+                  <>
+                    <p className="text-xs font-medium text-red-500 uppercase tracking-wide flex items-center gap-1.5 mt-4">
+                      <TrendingDown size={12} /> Losers
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {movers.losers.map((m) => (
+                        <MoverCard key={m.product_id} mover={m} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
     </div>
+  )
+}
+
+function MoverCard({ mover }: { mover: Mover }) {
+  const positive = mover.change_pct >= 0
+  return (
+    <Link
+      href={`/products/${encodeURIComponent(mover.product_id)}`}
+      className={`flex flex-col gap-1.5 border rounded-lg p-3 bg-card hover:bg-accent/30 transition-colors ${
+        positive ? "border-emerald-500/30" : "border-red-500/30"
+      }`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="w-9 h-9 rounded bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+          {mover.tcgplayer_id ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`https://product-images.tcgplayer.com/fit-in/64x64/${mover.tcgplayer_id}.jpg`}
+              alt={mover.name}
+              className="w-9 h-9 object-cover"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+            />
+          ) : (
+            <Package size={14} className="text-muted-foreground" />
+          )}
+        </div>
+        <p className="text-xs font-medium truncate flex-1">{mover.name}</p>
+      </div>
+      <p className="text-sm font-bold mt-0.5">{formatCurrency(mover.current_price)}</p>
+      <div className={`flex items-baseline gap-1 text-xs font-semibold ${positive ? "text-emerald-500" : "text-red-500"}`}>
+        <span>{formatPercent(mover.change_pct)}</span>
+        <span className="opacity-70 font-normal">
+          ({positive ? "+" : ""}{formatCurrency(mover.change_per_unit)}/unit)
+        </span>
+      </div>
+    </Link>
   )
 }

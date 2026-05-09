@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import { computeHoldingsAsOf } from "@/lib/holdings"
-import { buildPriceIndex, priceOnOrBefore, daterange } from "@/lib/price-lookup"
+import { buildPriceIndex, priceOnOrBefore, daterange, fetchAllPriceSnapshots } from "@/lib/price-lookup"
 import type { Transaction } from "@/lib/supabase"
 
 /**
@@ -21,12 +21,8 @@ export async function rebuildPortfolioSnapshots(portfolioIds?: string[]): Promis
 
   const productIds = [...new Set(allTxs.map((t) => t.product_id))]
 
-  const { data: allPriceSnaps } = await supabase
-    .from("price_snapshots")
-    .select("product_id, price, snapshot_date")
-    .in("product_id", productIds)
-
-  const pricesByProduct = buildPriceIndex(allPriceSnaps ?? [])
+  const allPriceSnaps = await fetchAllPriceSnapshots(supabase, productIds)
+  const pricesByProduct = buildPriceIndex(allPriceSnaps)
 
   // Earliest date to compute from = earliest transaction date overall.
   let earliest: string | null = null

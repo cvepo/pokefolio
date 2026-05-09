@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import { computeHoldings } from "@/lib/holdings"
-import { buildPriceIndex, priceOnOrBefore, daterange } from "@/lib/price-lookup"
+import { buildPriceIndex, priceOnOrBefore, daterange, fetchAllPriceSnapshots } from "@/lib/price-lookup"
 import type { Transaction } from "@/lib/supabase"
 
 /**
@@ -60,12 +60,8 @@ export async function computeProjectedSnapshots(
 
   if (productIds.size === 0) return []
 
-  const { data: allPriceSnaps } = await supabase
-    .from("price_snapshots")
-    .select("product_id, price, snapshot_date")
-    .in("product_id", [...productIds])
-
-  const pricesByProduct = buildPriceIndex(allPriceSnaps ?? [])
+  const allPriceSnaps = await fetchAllPriceSnapshots(supabase, [...productIds])
+  const pricesByProduct = buildPriceIndex(allPriceSnaps)
   const dates = daterange(earliest, today)
   const rows: Array<{ portfolio_id: string; snapshot_date: string; total_value: number }> = []
 
