@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Package, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
@@ -35,6 +35,80 @@ export default function ProductPage() {
   const [txNotes, setTxNotes] = useState("")
   const [adding, setAdding] = useState(false)
   const [txError, setTxError] = useState("")
+
+  type EditField = "transaction_date" | "quantity" | "price" | "notes"
+  const [editing, setEditing] = useState<{ txId: string; field: EditField } | null>(null)
+  const [draft, setDraft] = useState("")
+  const skipBlurRef = useRef(false)
+
+  const cancelEdit = useCallback(() => {
+    skipBlurRef.current = true
+    setEditing(null)
+    setDraft("")
+    requestAnimationFrame(() => { skipBlurRef.current = false })
+  }, [])
+
+  const startEdit = (tx: Transaction, field: EditField) => {
+    setEditing({ txId: tx.id, field })
+    switch (field) {
+      case "transaction_date": setDraft(tx.transaction_date.slice(0, 10)); break
+      case "quantity": setDraft(String(tx.quantity)); break
+      case "price": setDraft(String(Number(tx.price))); break
+      case "notes": setDraft(tx.notes ?? ""); break
+    }
+  }
+
+  async function commitEdit(txId: string, field: EditField, raw: string) {
+    if (skipBlurRef.current) return
+    const tx = transactions.find((t) => t.id === txId)
+    if (!tx) { cancelEdit(); return }
+
+    let patch: Partial<Transaction> | null = null
+    switch (field) {
+      case "transaction_date": {
+        const v = raw.trim()
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { alert("Use date format YYYY-MM-DD"); return }
+        if (v === tx.transaction_date.slice(0, 10)) { cancelEdit(); return }
+        patch = { transaction_date: v }
+        break
+      }
+      case "quantity": {
+        const q = Number.parseInt(raw.trim(), 10)
+        if (!Number.isFinite(q) || q < 1) { alert("Quantity must be a positive integer"); return }
+        if (q === tx.quantity) { cancelEdit(); return }
+        patch = { quantity: q }
+        break
+      }
+      case "price": {
+        const p = Number.parseFloat(raw.trim())
+        if (!Number.isFinite(p) || p < 0) { alert("Enter a valid price"); return }
+        if (p === Number(tx.price)) { cancelEdit(); return }
+        patch = { price: p }
+        break
+      }
+      case "notes": {
+        const n = raw.trim() === "" ? null : raw.trim()
+        if ((tx.notes ?? null) === n) { cancelEdit(); return }
+        patch = { notes: n }
+        break
+      }
+    }
+    if (!patch) { cancelEdit(); return }
+
+    try {
+      const res = await fetch(`/api/transactions/${txId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? "Update failed")
+      setTransactions((prev) => prev.map((t) => (t.id === txId ? { ...t, ...data } : t)))
+      cancelEdit()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to update")
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/products/${id}`).then((r) => r.json()).then(({ product, snapshots }) => {
@@ -358,38 +432,116 @@ export default function ProductPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sortedTxs.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-accent/20 transition-colors group">
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-md text-xs font-semibold ${
-                        tx.type === "buy"
-                          ? "bg-emerald-500/15 text-emerald-500"
-                          : "bg-red-500/15 text-red-500"
-                      }`}>
-                        {tx.type === "buy" ? "BUY" : "SELL"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {new Date(tx.transaction_date).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3 text-right">{tx.quantity}</td>
-                    <td className="px-4 py-3 text-right">{formatCurrency(Number(tx.price))}</td>
-                    <td className="px-4 py-3 text-right">
-                      {formatCurrency(Number(tx.price) * tx.quantity)}
-                    </td>
-                    <td className="px-4 py-3 max-w-[220px]">
-                      <span className="text-xs text-muted-foreground line-clamp-2">{tx.notes ?? "—"}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleDeleteTx(tx.id)}
-                        className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                {sortedTxs.map((tx) => {
+                  const isEditingDate = editing?.txId === tx.id && editing.field === "transaction_date"
+                  const isEditingQty = editing?.txId === tx.id && editing.field === "quantity"
+                  const isEditingPrice = editing?.txId === tx.id && editing.field === "price"
+                  const isEditingNotes = editing?.txId === tx.id && editing.field === "notes"
+                  return (
+                    <tr key={tx.id} className="hover:bg-accent/20 transition-colors group">
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-semibold ${
+                          tx.type === "buy"
+                            ? "bg-emerald-500/15 text-emerald-500"
+                            : "bg-red-500/15 text-red-500"
+                        }`}>
+                          {tx.type === "buy" ? "BUY" : "SELL"}
+                        </span>
+                      </td>
+                      <td
+                        className="px-4 py-3 whitespace-nowrap cursor-pointer"
+                        onClick={() => !isEditingDate && startEdit(tx, "transaction_date")}
+                        title="Click to edit"
                       >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                        {isEditingDate ? (
+                          <input
+                            type="date" value={draft} onChange={(e) => setDraft(e.target.value)}
+                            onBlur={() => void commitEdit(tx.id, "transaction_date", draft)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") { e.preventDefault(); cancelEdit() }
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                            }}
+                            className="px-2 py-1 rounded border border-input bg-background text-sm"
+                            autoFocus
+                          />
+                        ) : (
+                          new Date(tx.transaction_date).toLocaleDateString()
+                        )}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-right cursor-pointer"
+                        onClick={() => !isEditingQty && startEdit(tx, "quantity")}
+                        title="Click to edit"
+                      >
+                        {isEditingQty ? (
+                          <input
+                            type="number" min={1} step={1} value={draft} onChange={(e) => setDraft(e.target.value)}
+                            onBlur={() => void commitEdit(tx.id, "quantity", draft)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") { e.preventDefault(); cancelEdit() }
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                            }}
+                            className="w-20 px-2 py-1 rounded border border-input bg-background text-right text-sm ml-auto block"
+                            autoFocus
+                          />
+                        ) : (
+                          tx.quantity
+                        )}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-right cursor-pointer"
+                        onClick={() => !isEditingPrice && startEdit(tx, "price")}
+                        title="Click to edit"
+                      >
+                        {isEditingPrice ? (
+                          <input
+                            type="number" step="0.01" min={0} value={draft} onChange={(e) => setDraft(e.target.value)}
+                            onBlur={() => void commitEdit(tx.id, "price", draft)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") { e.preventDefault(); cancelEdit() }
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                            }}
+                            className="w-28 px-2 py-1 rounded border border-input bg-background text-right text-sm ml-auto block"
+                            autoFocus
+                          />
+                        ) : (
+                          formatCurrency(Number(tx.price))
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">
+                        {formatCurrency(Number(tx.price) * tx.quantity)}
+                      </td>
+                      <td
+                        className="px-4 py-3 max-w-[220px] cursor-pointer align-top"
+                        onClick={() => !isEditingNotes && startEdit(tx, "notes")}
+                        title="Click to edit"
+                      >
+                        {isEditingNotes ? (
+                          <input
+                            type="text" value={draft} onChange={(e) => setDraft(e.target.value)}
+                            onBlur={() => void commitEdit(tx.id, "notes", draft)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") { e.preventDefault(); cancelEdit() }
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                            }}
+                            className="w-full min-w-[160px] px-2 py-1 rounded border border-input bg-background text-sm"
+                            autoFocus
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground line-clamp-2">{tx.notes ?? "—"}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => handleDeleteTx(tx.id)}
+                          className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

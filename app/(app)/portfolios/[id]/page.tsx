@@ -144,7 +144,7 @@ export default function PortfolioDetailPage() {
 
   if (loading) {
     return (
-      <div className="p-8 max-w-5xl mx-auto space-y-4">
+      <div className="p-8 max-w-7xl mx-auto space-y-4">
         <div className="h-8 w-48 bg-muted rounded animate-pulse" />
         <div className="h-24 bg-muted rounded-lg animate-pulse" />
         <div className="h-64 bg-muted rounded-lg animate-pulse" />
@@ -158,7 +158,7 @@ export default function PortfolioDetailPage() {
     "inline-flex items-center gap-1 font-medium text-muted-foreground hover:text-foreground transition-colors select-none"
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -236,7 +236,7 @@ export default function PortfolioDetailPage() {
         </div>
       ) : (
         <div className="border border-border rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[800px]">
+          <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50">
                 <th className="text-left px-4 py-3">
