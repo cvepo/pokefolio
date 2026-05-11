@@ -3,6 +3,11 @@ import { supabase } from "@/lib/supabase"
 import { backfillPriceHistory } from "@/lib/backfill"
 import { rebuildPortfolioSnapshots } from "@/lib/rebuild-portfolio-snapshots"
 
+// Vercel Hobby default function timeout is 10s, which isn't enough once we
+// have ~20 products (each backfill is a separate JustTCG call with retries
+// + the rebuild walks the full date range). Cap at 60s.
+export const maxDuration = 60
+
 const BATCH_SIZE = 20 // free plan limit per batch request
 
 // GET is called by Vercel Cron (authenticated via middleware x-cron-secret check)

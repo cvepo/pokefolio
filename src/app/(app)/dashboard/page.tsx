@@ -5,7 +5,7 @@ import Link from "next/link"
 import { TrendingUp, TrendingDown, FolderOpen, Package } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 import { Portfolio, PortfolioSnapshot } from "@/lib/supabase"
-import { formatCurrency, formatPercent, formatSpan } from "@/lib/utils"
+import { formatCurrency, formatPercent, formatSpan, formatSnapshotDate } from "@/lib/utils"
 
 type Mover = {
   product_id: string
@@ -137,14 +137,17 @@ export default function DashboardPage() {
     .filter((date) => {
       const days = TIMEFRAME_DAYS[timeframe]
       if (days === Infinity) return true
+      // Parse YYYY-MM-DD as local date to avoid TZ shifting the cutoff comparison.
+      const [y, m, d] = date.split("-").map(Number)
+      const dateLocal = new Date(y, m - 1, d)
       const cutoff = new Date()
       cutoff.setDate(cutoff.getDate() - days)
-      return new Date(date) >= cutoff
+      return dateLocal >= cutoff
     })
     .sort()
 
   const chartData = filteredDates.map((date) => ({
-    date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    date: formatSnapshotDate(date),
     value: aggregatedByDate[date],
   }))
 

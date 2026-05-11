@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Package, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 import { Portfolio, Product, PriceSnapshot, Transaction } from "@/lib/supabase"
-import { formatCurrency, formatPercent, formatSpan } from "@/lib/utils"
+import { formatCurrency, formatPercent, formatSpan, formatSnapshotDate } from "@/lib/utils"
 import { useActivePortfolio } from "@/lib/use-active-portfolio"
 import { computeHoldings } from "@/lib/holdings"
 
@@ -128,13 +128,15 @@ export default function ProductPage() {
   const filteredSnapshots = snapshots.filter((s) => {
     const days = TIMEFRAME_DAYS[timeframe]
     if (days === Infinity) return true
+    const [y, m, d] = s.snapshot_date.split("-").map(Number)
+    const dateLocal = new Date(y, m - 1, d)
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - days)
-    return new Date(s.snapshot_date) >= cutoff
+    return dateLocal >= cutoff
   })
 
   const chartData = filteredSnapshots.map((s) => ({
-    date: new Date(s.snapshot_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    date: formatSnapshotDate(s.snapshot_date),
     price: Number(s.price),
   }))
 
