@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-server"
 
 /**
  * Fetches up to 1 year of price history from JustTCG for a product variant

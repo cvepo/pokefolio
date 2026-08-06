@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-server"
 import { backfillPriceHistory } from "@/lib/backfill"
 import { rebuildPortfolioSnapshots } from "@/lib/rebuild-portfolio-snapshots"
 import { checkOversell } from "@/lib/holdings"
