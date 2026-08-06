@@ -151,6 +151,16 @@ export default function DashboardPage() {
     value: aggregatedByDate[date],
   }))
 
+  const chartYDomain = (() => {
+    if (chartData.length < 2) return undefined
+    const values = chartData.map((d) => d.value)
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const span = max - min
+    const pad = span > 0 ? span * 0.06 : Math.max(Math.abs(min) * 0.02, 10)
+    return [min - pad, max + pad] as [number, number]
+  })()
+
   const totalValue = portfolios.reduce((s, p) => s + p.latestValue, 0)
 
   const firstChartValue = chartData[0]?.value
@@ -297,12 +307,27 @@ export default function DashboardPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v.toLocaleString()}`} width={70} />
+                  <YAxis
+                    domain={chartYDomain ?? ["auto", "auto"]}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `$${Math.round(v).toLocaleString()}`}
+                    width={70}
+                  />
                   <Tooltip
                     contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
                     formatter={(value) => [formatCurrency(Number(value)), "Portfolio Value"]}
                   />
-                  <Area type="monotone" dataKey="value" stroke="#06b6d4" strokeWidth={2} fill="url(#dashGradient)" dot={false} />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#06b6d4"
+                    strokeWidth={2}
+                    fill="url(#dashGradient)"
+                    dot={false}
+                    baseValue="dataMin"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             )}
