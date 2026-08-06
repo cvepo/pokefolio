@@ -31,6 +31,34 @@ export function formatSnapshotDate(yyyyMmDd: string): string {
 }
 
 /**
+ * Format a timestamptz as "Aug 6, 2026 at 3:42 PM" in the viewer's local time.
+ * Used for the sync log, where the exact minute matters.
+ */
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+/** Compact variant for tight spaces: "Aug 6, 3:42 PM". */
+export function formatDateTimeShort(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+/**
  * Format a calendar span (YYYY-MM-DD inputs) as "1y 3mo", "5mo 12d", "9d", etc.
  * Drops `d` once the span is ≥ 3 months to avoid clutter.
  */

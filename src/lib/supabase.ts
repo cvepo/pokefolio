@@ -1,10 +1,9 @@
-import { createClient } from "@supabase/supabase-js"
-
-const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
-const supabaseUrl = rawUrl.startsWith("https://") ? rawUrl : "https://placeholder.supabase.co"
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "placeholder_key"
-
-export const supabase = createClient(supabaseUrl, supabaseKey)
+/**
+ * Shared database types. Safe to import from client components — this module
+ * deliberately contains no Supabase client and no credentials.
+ *
+ * The client itself lives in @/lib/supabase-server and is server-only.
+ */
 
 export type Product = {
   id: string
@@ -67,4 +66,37 @@ export type PortfolioSnapshot = {
   portfolio_id: string
   total_value: number
   snapshot_date: string
+}
+
+/** How a sync was started. 'cron' = Vercel Cron, 'manual' = user pressed Sync now. */
+export type SyncTrigger = "cron" | "manual"
+
+/** 'skipped' means a cron fired on a day outside the schedule — no API calls were made. */
+export type SyncStatus = "success" | "partial" | "failed" | "skipped"
+
+export type SyncRun = {
+  id: string
+  started_at: string
+  finished_at: string | null
+  trigger: SyncTrigger
+  status: SyncStatus
+  products_total: number
+  products_synced: number
+  products_failed: number
+  snapshots_written: number
+  history_points_written: number
+  backfilled_products: number
+  api_requests_used: number
+  api_daily_remaining: number | null
+  api_monthly_remaining: number | null
+  error: string | null
+  failures: Array<{ product_id: string; name?: string; reason: string }>
+}
+
+export type AppSettings = {
+  id: number
+  /** JS getDay() numbering: 0=Sunday … 6=Saturday. */
+  sync_days: number[]
+  sync_timezone: string
+  updated_at: string
 }

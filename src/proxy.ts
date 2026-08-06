@@ -11,9 +11,15 @@ export function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/sync")) {
-    const secret = request.headers.get("x-cron-secret")
-    if (secret === process.env.CRON_SECRET) {
-      return NextResponse.next()
+    const secret = process.env.CRON_SECRET
+    // Vercel Cron cannot send custom headers — it authenticates with
+    // `Authorization: Bearer $CRON_SECRET`. Only accepting `x-cron-secret`
+    // meant every scheduled run was rejected here with a 401.
+    if (secret) {
+      const auth = request.headers.get("authorization")
+      if (request.headers.get("x-cron-secret") === secret || auth === `Bearer ${secret}`) {
+        return NextResponse.next()
+      }
     }
     const cookie = request.cookies.get("auth")
     if (cookie?.value === process.env.ADMIN_PASSWORD) {
@@ -24,6 +30,11 @@ export function proxy(request: NextRequest) {
 
   const cookie = request.cookies.get("auth")
   if (cookie?.value !== process.env.ADMIN_PASSWORD) {
+    // API routes get a JSON 401 — redirecting an fetch() to an HTML login page
+    // surfaces as an opaque JSON parse error in the client.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     return NextResponse.redirect(new URL("/login", request.url))
   }
 

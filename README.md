@@ -57,16 +57,26 @@ Create `.env.local`
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 ADMIN_PASSWORD=
 JUSTTCG_API_KEY=
 CRON_SECRET=
 ```
 
-Run database setup:
+`SUPABASE_SERVICE_ROLE_KEY` must **not** carry a `NEXT_PUBLIC_` prefix — it is
+server-only. All database access happens in `/api/*` route handlers via
+`src/lib/supabase-server.ts`; the browser never queries Supabase directly.
+
+`CRON_SECRET` must also be set in Vercel, or the scheduled sync is rejected by
+`src/proxy.ts`.
+
+Run database setup, in order:
 
 ```txt
 supabase/schema.sql
 supabase/migrations/002_transactions.sql
+supabase/migrations/003_sync_log_and_schedule.sql
+supabase/migrations/004_enable_rls.sql   ← only after Settings shows "service-role"
 ```
 
 Start dev server:

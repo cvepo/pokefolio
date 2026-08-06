@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-server"
 import { computeHoldings } from "@/lib/holdings"
 import { buildPriceIndex, priceOnOrBefore, daterange, fetchAllPriceSnapshots } from "@/lib/price-lookup"
 import type { Transaction } from "@/lib/supabase"
