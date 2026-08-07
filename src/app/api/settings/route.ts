@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server"
-import { supabase, supabaseKeyMode } from "@/lib/supabase-server"
+import { supabase, supabaseKeyMode, serviceKeyType } from "@/lib/supabase-server"
 import { getAppSettings, getLastSyncRun } from "@/lib/sync-log"
 
 /** GET /api/settings — sync schedule, latest sync run, and DB credential mode. */
 export async function GET() {
   const [settings, lastRun] = await Promise.all([getAppSettings(), getLastSyncRun()])
-  // supabaseKeyMode tells the UI whether it's safe to enable RLS yet. Only the
-  // mode name is exposed — never the key itself.
-  return NextResponse.json({ settings, lastRun, supabaseKeyMode })
+  // Both fields are labels derived from the credential, never the value or any
+  // prefix of it. supabaseKeyMode says whether a service key is in use at all;
+  // serviceKeyType says which credential system it belongs to, so you can tell
+  // whether revoking the legacy JWT signing key is safe for THIS deployment.
+  return NextResponse.json({ settings, lastRun, supabaseKeyMode, serviceKeyType })
 }
 
 /** PATCH /api/settings — update which weekdays the scheduled sync runs on. */

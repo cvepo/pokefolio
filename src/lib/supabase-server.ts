@@ -35,6 +35,24 @@ export const supabaseKeyMode: "service_role" | "anon" | "missing" = serviceKey
     ? "anon"
     : "missing"
 
+/**
+ * Which *kind* of service credential is configured — a label only, never the
+ * value or any prefix of it.
+ *
+ * Exists so you can confirm which credential a deployment is actually holding
+ * before revoking the legacy JWT signing key in Supabase. That revocation is
+ * irreversible and kills every legacy HS256 key at once, so doing it while a
+ * deployment still runs on `legacy_jwt` takes the app down with no way back
+ * except issuing a fresh secret key.
+ */
+export const serviceKeyType: "sb_secret" | "legacy_jwt" | "unknown" | "none" = !serviceKey
+  ? "none"
+  : serviceKey.startsWith("sb_secret_")
+    ? "sb_secret"
+    : serviceKey.startsWith("eyJ") && serviceKey.split(".").length === 3
+      ? "legacy_jwt"
+      : "unknown"
+
 if (supabaseKeyMode === "anon") {
   console.warn(
     "[supabase] SUPABASE_SERVICE_ROLE_KEY is not set — falling back to the anon key. " +
