@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { RefreshCw, CheckCircle, AlertCircle, AlertTriangle, Clock } from "lucide-react"
+import { RefreshCw, CheckCircle, AlertCircle, AlertTriangle, Clock, Globe } from "lucide-react"
 import { DAY_LABELS, triggerLabel, useSyncStatus } from "@/lib/use-sync-status"
-import { cn, formatDateTime } from "@/lib/utils"
+import { cn, describeSyncTime, formatDateTime } from "@/lib/utils"
 
 export default function SettingsPage() {
   const { settings, lastRun, keyMode, keyType, loading, syncing, error, runSync, saveSyncDays } =
@@ -185,13 +185,7 @@ export default function SettingsPage() {
               {saveError && <span className="text-xs text-destructive">{saveError}</span>}
             </div>
 
-            <p className="text-xs text-muted-foreground flex items-start gap-1.5">
-              <Clock size={13} className="mt-0.5 shrink-0" />
-              <span>
-                Days are evaluated in {settings?.sync_timezone ?? "America/New_York"}. Manual syncs
-                always run, whatever day it is.
-              </span>
-            </p>
+            <ScheduleTimeNote timeZone={settings?.sync_timezone ?? "America/New_York"} />
           </>
         )}
       </div>
@@ -288,6 +282,59 @@ export default function SettingsPage() {
           with sparse history. Each manual search costs 1 request.
         </p>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Spells out when a scheduled run actually fires, in the schedule's timezone
+ * and in the viewer's. Rendered after mount because it reads the browser's
+ * timezone, which the server can't know — otherwise the prerendered HTML would
+ * show the build machine's timezone.
+ */
+function ScheduleTimeNote({ timeZone }: { timeZone: string }) {
+  const [info, setInfo] = useState<ReturnType<typeof describeSyncTime> | null>(null)
+  useEffect(() => setInfo(describeSyncTime(timeZone)), [timeZone])
+
+  return (
+    <div className="text-xs text-muted-foreground space-y-1.5 border-t border-border pt-3">
+      <p className="flex items-start gap-1.5">
+        <Clock size={13} className="mt-0.5 shrink-0" />
+        <span>
+          Day selection is evaluated in <span className="font-medium text-foreground">{timeZone}</span>.
+          {info && (
+            <>
+              {" "}A scheduled run fires at{" "}
+              <span className="font-medium text-foreground">{info.scheduleLabel}</span> there.
+            </>
+          )}
+        </span>
+      </p>
+
+      {info && info.localTimeZone !== timeZone && (
+        <p className="flex items-start gap-1.5">
+          <Globe size={13} className="mt-0.5 shrink-0" />
+          <span>
+            You&apos;re in <span className="font-medium text-foreground">{info.localTimeZone}</span>,
+            where that lands at{" "}
+            <span className="font-medium text-foreground">{info.localLabel}</span>
+            {info.differentDay && (
+              <>
+                {" "}
+                — <span className="text-amber-500 font-medium">a different day than the one you
+                selected</span>. Picking Wed runs on the Eastern Wednesday, which is Tuesday evening
+                for you.
+              </>
+            )}
+            .
+          </span>
+        </p>
+      )}
+
+      <p className="flex items-start gap-1.5">
+        <RefreshCw size={13} className="mt-0.5 shrink-0" />
+        <span>Manual syncs always run, whatever day it is.</span>
+      </p>
     </div>
   )
 }

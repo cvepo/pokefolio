@@ -31,6 +31,51 @@ export function formatSnapshotDate(yyyyMmDd: string): string {
 }
 
 /**
+ * UTC hour at which the scheduled sync fires.
+ * MUST stay in sync with `crons[0].schedule` in vercel.json ("0 9 * * *").
+ */
+export const SYNC_CRON_UTC_HOUR = 9
+
+/**
+ * Describe when the scheduled sync actually fires, in both the timezone the
+ * day selection is evaluated in and the viewer's own timezone.
+ *
+ * These can disagree about which DAY it is: 09:00 UTC is Wed 5:00 AM in
+ * America/New_York but Tue 11:00 PM in Pacific/Honolulu. Selecting "Wed" means
+ * the Eastern Wednesday, so a viewer further west sees it run the evening
+ * before. Surfacing both sides is the difference between that being a
+ * documented behaviour and looking like an off-by-one bug.
+ */
+export function describeSyncTime(scheduleTimeZone: string): {
+  scheduleLabel: string
+  localLabel: string
+  localTimeZone: string
+  differentDay: boolean
+} {
+  // Reference instant: today's cron firing, in UTC.
+  const ref = new Date()
+  ref.setUTCHours(SYNC_CRON_UTC_HOUR, 0, 0, 0)
+
+  const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const label = (tz: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "short",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(ref)
+  const day = (tz: string) =>
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(ref)
+
+  return {
+    scheduleLabel: label(scheduleTimeZone),
+    localLabel: label(localTimeZone),
+    localTimeZone,
+    differentDay: day(scheduleTimeZone) !== day(localTimeZone),
+  }
+}
+
+/**
  * Format a timestamptz as "Aug 6, 2026 at 3:42 PM" in the viewer's local time.
  * Used for the sync log, where the exact minute matters.
  */
