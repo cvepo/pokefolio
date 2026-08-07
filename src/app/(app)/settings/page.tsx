@@ -6,7 +6,7 @@ import { DAY_LABELS, triggerLabel, useSyncStatus } from "@/lib/use-sync-status"
 import { cn, formatDateTime } from "@/lib/utils"
 
 export default function SettingsPage() {
-  const { settings, lastRun, keyMode, loading, syncing, error, runSync, saveSyncDays } =
+  const { settings, lastRun, keyMode, keyType, loading, syncing, error, runSync, saveSyncDays } =
     useSyncStatus()
 
   const [draftDays, setDraftDays] = useState<number[] | null>(null)
@@ -202,15 +202,59 @@ export default function SettingsPage() {
         {loading ? (
           <div className="h-12 bg-muted rounded animate-pulse" />
         ) : keyMode === "service_role" ? (
-          <div className="flex items-start gap-2.5 text-sm">
-            <CheckCircle size={16} className="mt-0.5 shrink-0 text-emerald-500" />
-            <div>
-              <p className="font-medium">Using the service-role key</p>
-              <p className="text-muted-foreground">
-                Safe to enable Row Level Security. Run{" "}
-                <code className="text-xs">004_enable_rls.sql</code> to lock the public anon key out
-                of the database.
-              </p>
+          <div className="space-y-3">
+            <div className="flex items-start gap-2.5 text-sm">
+              <CheckCircle size={16} className="mt-0.5 shrink-0 text-emerald-500" />
+              <div>
+                <p className="font-medium">Using a service-role credential</p>
+                <p className="text-muted-foreground">
+                  Row Level Security is active; the public anon key cannot reach the database.
+                </p>
+              </div>
+            </div>
+
+            {/* Which credential system — decides whether revoking the legacy
+                JWT signing key is safe for THIS deployment. */}
+            <div className="flex items-start gap-2.5 text-sm border-t border-border pt-3">
+              {keyType === "sb_secret" ? (
+                <>
+                  <CheckCircle size={16} className="mt-0.5 shrink-0 text-emerald-500" />
+                  <div>
+                    <p className="font-medium">
+                      New secret key <code className="text-xs">sb_secret_…</code>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Safe to revoke the legacy HS256 JWT signing key in Supabase. This deployment
+                      does not depend on it.
+                    </p>
+                  </div>
+                </>
+              ) : keyType === "legacy_jwt" ? (
+                <>
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+                  <div>
+                    <p className="font-medium">Legacy JWT service-role key</p>
+                    <p className="text-muted-foreground">
+                      <span className="font-medium">
+                        Do not revoke the legacy HS256 signing key
+                      </span>{" "}
+                      — it would invalidate this credential and take the app down. Swap this
+                      environment to an <code className="text-xs">sb_secret_…</code> key first.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+                  <div>
+                    <p className="font-medium">Unrecognized key format</p>
+                    <p className="text-muted-foreground">
+                      The configured key is neither an <code className="text-xs">sb_secret_…</code>{" "}
+                      key nor a JWT. Verify it was pasted correctly.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ) : (

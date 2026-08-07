@@ -13,11 +13,13 @@ const SYNC_EVENT = "pokefolio:sync-updated"
  * sidebar would keep showing a stale "last sync" after syncing from Settings.
  */
 export type SupabaseKeyMode = "service_role" | "anon" | "missing"
+export type ServiceKeyType = "sb_secret" | "legacy_jwt" | "unknown" | "none"
 
 export function useSyncStatus() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [lastRun, setLastRun] = useState<SyncRun | null>(null)
   const [keyMode, setKeyMode] = useState<SupabaseKeyMode | null>(null)
+  const [keyType, setKeyType] = useState<ServiceKeyType | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +32,7 @@ export function useSyncStatus() {
       setSettings(data.settings ?? null)
       setLastRun(data.lastRun ?? null)
       setKeyMode(data.supabaseKeyMode ?? null)
+      setKeyType(data.serviceKeyType ?? null)
     } catch {
       // Leave prior values in place — a failed poll shouldn't blank the UI.
     } finally {
@@ -80,7 +83,18 @@ export function useSyncStatus() {
     []
   )
 
-  return { settings, lastRun, keyMode, loading, syncing, error, runSync, refresh, saveSyncDays }
+  return {
+    settings,
+    lastRun,
+    keyMode,
+    keyType,
+    loading,
+    syncing,
+    error,
+    runSync,
+    refresh,
+    saveSyncDays,
+  }
 }
 
 /** Human label for how a run was started. */
