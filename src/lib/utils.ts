@@ -18,6 +18,14 @@ export function formatPercent(value: number): string {
   return `${sign}${value.toFixed(2)}%`
 }
 
+/** Currency with an explicit +/− sign (e.g. "+$12.50", "−$3.00"). */
+export function formatSignedCurrency(value: number): string {
+  const abs = formatCurrency(Math.abs(value))
+  if (value > 0) return `+${abs}`
+  if (value < 0) return `−${abs}`
+  return abs
+}
+
 /**
  * Format a YYYY-MM-DD snapshot date as "May 11" without timezone shifting.
  * `new Date("2026-05-11")` parses as UTC midnight, which in negative-UTC

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, FolderOpen, Search, Settings, LogOut, Moon, Sun, BarChart3, RefreshCw } from "lucide-react"
+import { LayoutDashboard, FolderOpen, Search, Settings, LogOut, Moon, Sun, BarChart3, RefreshCw, LineChart } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import { cn, formatDateTimeShort } from "@/lib/utils"
 import { triggerLabel, useSyncStatus } from "@/lib/use-sync-status"
@@ -10,6 +10,7 @@ import { triggerLabel, useSyncStatus } from "@/lib/use-sync-status"
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolios", label: "Portfolios", icon: FolderOpen },
+  { href: "/compare", label: "Compare", icon: LineChart },
   { href: "/search", label: "Search", icon: Search },
   { href: "/data", label: "Data", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
