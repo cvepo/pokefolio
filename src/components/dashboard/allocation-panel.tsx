@@ -20,12 +20,12 @@ export function AllocationPanel({ allocation }: AllocationPanelProps) {
   const buckets = group === "set" ? allocation.bySet : allocation.byCategory
 
   return (
-    <section className="border border-border rounded-xl bg-card p-5 space-y-3">
+    <section className="border border-border rounded-md bg-card p-3 3xl:p-4 space-y-2 h-full">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           Allocation
         </h2>
-        <div className="flex gap-1 p-0.5 rounded-md border border-border bg-background/50">
+        <div className="flex gap-0.5 p-0.5 rounded border border-border bg-background/50">
           {(
             [
               ["set", "By set"],
@@ -37,7 +37,7 @@ export function AllocationPanel({ allocation }: AllocationPanelProps) {
               type="button"
               onClick={() => setGroup(id)}
               className={cn(
-                "px-2.5 py-1 rounded text-xs font-medium transition-colors",
+                "px-2 py-0.5 rounded-sm text-[11px] font-medium transition-colors",
                 group === id
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -50,9 +50,9 @@ export function AllocationPanel({ allocation }: AllocationPanelProps) {
       </div>
 
       {buckets.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4">No allocation data.</p>
+        <p className="text-sm text-muted-foreground py-3">No allocation data.</p>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="space-y-2">
           {buckets.map((b) => (
             <AllocationRow key={b.key} bucket={b} />
           ))}
@@ -68,18 +68,18 @@ function AllocationRow({ bucket }: { bucket: AllocationBucket }) {
     <li className="space-y-1">
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-medium truncate">{bucket.label}</span>
-        <span className="tabular-nums text-muted-foreground shrink-0">
+        <span className="tabular-nums text-muted-foreground shrink-0 text-[13px]">
           {formatShare(bucket.share)} · {formatCents(bucket.value)}
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className="h-1 rounded-full bg-muted overflow-hidden">
         <div
           className="h-full rounded-full bg-cyan-500/80"
           style={{ width: `${pct}%` }}
           role="presentation"
         />
       </div>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[10px] text-muted-foreground tabular-nums">
         {bucket.positionCount} position{bucket.positionCount === 1 ? "" : "s"}
       </p>
     </li>

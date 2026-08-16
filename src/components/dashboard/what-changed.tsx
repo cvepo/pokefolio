@@ -46,15 +46,15 @@ export function WhatChanged({ insights, displayCap = INSIGHT_DISPLAY_CAP }: What
   }, [visible])
 
   return (
-    <section className="border border-border rounded-xl bg-card p-5 space-y-3">
+    <section className="border border-border rounded-md bg-card p-3 3xl:p-4 space-y-2 h-full">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           What Changed
         </h2>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground">
           <span className="tabular-nums">{formatInsightsCounter(shown, total)}</span>
           {insights.unseenCount > 0 && (
-            <span className="text-amber-600 dark:text-amber-400 font-medium">
+            <span className="text-amber-600 dark:text-amber-400 font-medium tabular-nums">
               {insights.unseenCount} unseen
             </span>
           )}
@@ -71,9 +71,9 @@ export function WhatChanged({ insights, displayCap = INSIGHT_DISPLAY_CAP }: What
       </div>
 
       {visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4">Nothing new — portfolio is quiet.</p>
+        <p className="text-sm text-muted-foreground py-3">Nothing new — portfolio is quiet.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-1.5">
           {visible.map((event) => (
             <InsightRow key={event.id} event={event} />
           ))}
@@ -88,12 +88,12 @@ function InsightRow({ event }: { event: InsightEvent }) {
   return (
     <li
       className={cn(
-        "flex items-start gap-3 rounded-lg border border-border/80 px-3 py-2.5",
+        "flex items-start gap-2 rounded-md border border-border/80 px-2.5 py-2",
         event.seenAt == null && "bg-accent/30"
       )}
     >
       <span
-        className={cn("text-sm font-semibold shrink-0 w-5 text-center", meta.toneClass)}
+        className={cn("text-sm font-semibold shrink-0 w-4 text-center", meta.toneClass)}
         title={meta.label}
         aria-label={meta.label}
       >
@@ -101,7 +101,7 @@ function InsightRow({ event }: { event: InsightEvent }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium leading-snug">{event.headline}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+        <p className="text-[10px] text-muted-foreground mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
           <span className={meta.toneClass}>{meta.label}</span>
           <span aria-hidden>·</span>
           <span>{event.setName}</span>
@@ -119,7 +119,7 @@ function InsightRow({ event }: { event: InsightEvent }) {
           )}
         </p>
         {event.detail && (
-          <p className="text-xs text-muted-foreground mt-1">{event.detail}</p>
+          <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">{event.detail}</p>
         )}
       </div>
     </li>
