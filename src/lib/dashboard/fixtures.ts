@@ -134,10 +134,15 @@ function buildSeries(): PerformancePoint[] {
     const projectedBase = 45800 + t * 1800 + Math.cos(t * Math.PI * 2) * 600
     // Gap day mid-series on actual to exercise connectNulls:false
     const gap = i === 14
+    // First few days sit before price tracking began, so they are valued at
+    // cost basis — the span the chart must mark rather than pass off as
+    // tracked market value.
+    const basis = i < 4 ? "cost" : i < 7 ? "partial" : "market"
     points.push({
       date,
       actual: gap ? null : Math.round(actualBase * 100),
       projected: Math.round(projectedBase * 100),
+      actualBasis: gap ? null : basis,
     })
   }
   return points
