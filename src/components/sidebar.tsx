@@ -9,6 +9,7 @@ import { triggerLabel, useSyncStatus } from "@/lib/use-sync-status"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard-v2", label: "Dashboard v2", icon: LayoutDashboard },
   { href: "/portfolios", label: "Portfolios", icon: FolderOpen },
   { href: "/compare", label: "Compare", icon: LineChart },
   { href: "/search", label: "Search", icon: Search },
@@ -33,21 +34,27 @@ export function Sidebar() {
         <span className="font-bold text-lg tracking-tight">Pokéfolio</span>
       </div>
       <nav className="flex-1 px-2 py-3 space-y-0.5">
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-              pathname.startsWith(href)
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-            )}
-          >
-            <Icon size={16} />
-            {label}
-          </Link>
-        ))}
+        {navItems.map(({ href, label, icon: Icon }) => {
+            const active =
+              href === "/dashboard"
+                ? pathname === "/dashboard" || pathname === "/dashboard/"
+                : pathname.startsWith(href)
+            return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                active
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              )}
+            >
+              <Icon size={16} />
+              {label}
+            </Link>
+            )
+          })}
       </nav>
       <div className="px-2 py-3 border-t border-border space-y-0.5">
         {/* Sync — available from any page, not just Settings. The timestamp
