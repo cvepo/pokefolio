@@ -135,6 +135,47 @@ together on the first attempt.
 
 ---
 
+## A9 — Pre-tracking dates are valued at cost basis, and marked
+
+Pokéfolio only has prices from the day it began tracking each product
+(~2025-05-09), but the earliest transaction is 2025-01-25. Something has to be
+shown for the 125 days in between.
+
+The first implementation contributed **zero** for unpriced positions. Measured
+against the live dataset that understated the chart by up to **$10,410**, while
+today's figure matched exactly — a chart correct at the right edge and five
+figures wrong at the left is worse than one that is visibly broken, because
+nothing signals the error.
+
+**Decision:** fall back to the position's cost basis, exactly as
+`rebuildPortfolioSnapshots` already does, so `/dashboard-v2` agrees with
+`/dashboard` and `/data` (§21). Verified empirically: **0 of 569 days differ.**
+
+Because §8 forbids substituting a value without indicating it, the fallback is
+reported rather than hidden. `PerformancePoint.actualBasis` is `market`,
+`partial` or `cost`, the chart shades the affected span, and the tooltip states
+it in words so shading is never the only signal.
+
+---
+
+## A10 — Analytics failures must not fail the operation that triggered them
+
+A manual sync priced all 20 products, spent its API request, wrote every
+snapshot — and then reported failure, because the analytics publish threw on a
+table that did not exist yet and the error escaped the route.
+
+Pricing is expensive, rate-limited against a 100/day budget, and not freely
+retryable. Analytics is pure recomputation over already-committed data that the
+next sync or mutation rebuilds for free. Letting the cheap half fail the
+expensive one reports a data outage that did not happen.
+
+**Decision:** analytics recomputation never throws into its caller. `/api/sync`
+returns `analyticsPublished` / `analyticsError` so the staleness is visible, and
+mutations go through `refreshAnalyticsAfterMutation`, which logs and continues —
+a saved purchase must never surface as "adding your purchase failed".
+
+---
+
 ## Integration status — what is NOT yet verified
 
 Everything below is green: `tsc --noEmit` clean, 99 tests passing, production
@@ -153,13 +194,15 @@ closed by CI:**
    first transaction edit after migrating will publish one. Nothing renders
    before that.
 
-3. **PRD §21 parity is UNVERIFIED.** This is the important one. The acceptance
-   criterion is that the new dashboard's figures match the existing Data and
-   Compare pages exactly. Both now compute FIFO through the same
-   `computeHoldings`, so they *should* agree — but "should" is not "does," and
-   the whole point of building at a parallel route (A6) was to check rather than
-   assume. Compare cost basis, unrealized P/L, realized P/L and net cash flow
-   across `/data` and `/dashboard-v2` before swapping the routes.
+3. **PRD §21 parity — chart VERIFIED, tables still unverified.** The value
+   chart was checked against the live dataset and now matches
+   `rebuildPortfolioSnapshots` on all 569 days (A9); it did not before. Cost
+   basis, unrealized P/L, realized P/L and net cash flow still need comparing
+   across `/data` and `/dashboard-v2` once a snapshot exists. Note the engine
+   groups transactions per product across portfolios while the older code
+   groups per (portfolio, product) — identical for quantities and totals, but
+   worth confirming for FIFO realized P/L if any product is held in more than
+   one portfolio.
 
 4. **The category fixture is not the real catalog.** `categorize.test.ts` pins
    category inference against product names taken from repository history and
