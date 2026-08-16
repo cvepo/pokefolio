@@ -176,44 +176,52 @@ a saved purchase must never surface as "adding your purchase failed".
 
 ---
 
-## Integration status — what is NOT yet verified
+## Integration status
 
-Everything below is green: `tsc --noEmit` clean, 99 tests passing, production
-build compiling, `/dashboard` and `/dashboard-v2` coexisting.
+Migrations 005-008 applied 2026-08-16. Two snapshots published (combined +
+Main), 3 insight events created on the combined scope.
 
-None of that touches a database. **The following remain open and cannot be
-closed by CI:**
+### Verified against the live database
 
-1. **Migrations 005–008 have never been applied.** They are files only, per A7.
-   Until they are run in the Supabase SQL editor, every new endpoint returns
-   503 `no_snapshot` and `/dashboard-v2` shows its error state. Apply them in
-   order.
+**PRD §21 parity — PASSED.** Every headline figure on `/dashboard-v2` matches a
+`/data`-style recomputation exactly:
 
-2. **No snapshot exists until something publishes one.** The engine is wired to
-   price sync and to transaction mutations (PRD §7), so the first sync or the
-   first transaction edit after migrating will publish one. Nothing renders
-   before that.
+| Figure | Snapshot | Recomputed | |
+|---|---|---|---|
+| totalValue | 40,098.90 | 40,098.90 | match |
+| costBasis | 14,275.00 | 14,275.00 | match |
+| unrealizedPnl | 25,823.90 | 25,823.90 | match |
+| realizedPnl | 0.00 | 0.00 | match |
+| netCashFlow | −14,275.00 | −14,275.00 | match |
+| totalInvested | 14,275.00 | 14,275.00 | match |
+| totalProceeds | 0.00 | 0.00 | match |
+| unitCount | 248 | 248 | match |
 
-3. **PRD §21 parity — chart VERIFIED, tables still unverified.** The value
-   chart was checked against the live dataset and now matches
-   `rebuildPortfolioSnapshots` on all 569 days (A9); it did not before. Cost
-   basis, unrealized P/L, realized P/L and net cash flow still need comparing
-   across `/data` and `/dashboard-v2` once a snapshot exists. Note the engine
-   groups transactions per product across portfolios while the older code
-   groups per (portfolio, product) — identical for quantities and totals, but
-   worth confirming for FIFO realized P/L if any product is held in more than
-   one portfolio.
+The value chart was separately verified across all 569 days (A9): 0 differ.
 
-4. **The category fixture is not the real catalog.** `categorize.test.ts` pins
-   category inference against product names taken from repository history and
-   the PRD, because the build environment could not export the live catalog.
-   PRD §13 explicitly wants the rules tested against the *full* known catalog so
-   a new set's naming convention cannot silently land in Uncategorized. Export
-   the real `products.name` list and extend the fixture.
+**Failure isolation (A10) — CONFIRMED in production.** Manual syncs now log
+`success 20/20` where the same run previously logged `failed`.
 
-5. **`POST /api/insights/seen` has no response type in the contract.** It
-   returns `{ ok: true, updated: number }`. Add it to `contract.ts` at the next
-   contract revision rather than leaving it implicit.
+### Still open
 
-Only after 1–4 should `/dashboard` be replaced by `/dashboard-v2` and the old
-page deleted.
+1. **Realized P/L parity is untested, not proven.** Every figure above matches,
+   but `realizedPnl` and `totalProceeds` are both 0.00 because the portfolio
+   contains no sell transactions yet. The engine groups transactions per product
+   *across* portfolios while the older code groups per (portfolio, product) —
+   identical while nothing is sold and only one portfolio exists, but those are
+   exactly the conditions that make the difference invisible. Re-run the parity
+   check after the first sell, or after a second portfolio holds a shared
+   product.
+
+2. **The category fixture is not the real catalog.** `categorize.test.ts` pins
+   inference against product names from repository history and the PRD rather
+   than the live `products.name` list, so a new set's naming convention could
+   still land in Uncategorized unnoticed (PRD §13 asks for the full catalog).
+
+3. **`POST /api/insights/seen` has no response type in the contract.** It
+   returns `{ ok: true, updated: number }`. Add it at the next contract revision.
+
+4. **Routes not yet swapped.** A6's precondition (verified parity) is now met
+   for the current data, so `/dashboard` can be replaced by `/dashboard-v2` and
+   the old page deleted whenever you want — but see item 1 first if you expect
+   to record a sale soon.
