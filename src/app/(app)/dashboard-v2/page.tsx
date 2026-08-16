@@ -208,7 +208,7 @@ export default function DashboardV2Page() {
                 : "col-span-1 xl:col-span-5 3xl:col-span-6"
             )}
           >
-            <HoldingsHeatmap positions={payload.positions} tier={density.tier} />
+            <HoldingsHeatmap positions={payload.positions} />
           </div>
 
           {density.holdingPeriodSeparate && (

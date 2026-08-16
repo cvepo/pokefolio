@@ -4,7 +4,6 @@ import {
   clampHeatmapChange,
   heatmapFillCss,
   heatmapNormalized,
-  heatmapSizeWeight,
   heatmapTileState,
 } from "@/lib/dashboard/heatmap"
 
@@ -57,13 +56,3 @@ describe("heatmapFillCss", () => {
   })
 })
 
-describe("heatmapSizeWeight", () => {
-  it("floors empty/unknown value at 1", () => {
-    expect(heatmapSizeWeight(0)).toBe(1)
-    expect(heatmapSizeWeight(-10)).toBe(1)
-  })
-
-  it("scales with dollar value", () => {
-    expect(heatmapSizeWeight(10_000_00)).toBeGreaterThan(heatmapSizeWeight(100_00))
-  })
-})

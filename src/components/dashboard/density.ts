@@ -45,16 +45,16 @@ export function insightDisplayCapForWidth(width: number): number {
   return INSIGHT_DISPLAY_CAP
 }
 
-/**
- * Heatmap tile flex-basis — wider tiers cap tile width so wrap gains columns
- * instead of stretching tiles unboundedly.
+/*
+ * There is deliberately no heatmap tile-sizing helper here.
+ *
+ * A per-tier flex-basis clamp used to live at this spot, and it broke the
+ * encoding PRD §15 requires: bounding every tile between 64px and 140px meant a
+ * position worth 20x another rendered barely 2x wider, and the min-widths
+ * pushed the last tile of each row past the pane edge. Tile geometry now comes
+ * from the squarified treemap in `@/lib/dashboard/treemap`, which makes area
+ * proportional to value and fills the pane exactly.
  */
-export function heatmapTileFlexBasis(weight: number, tier: DensityTier): number {
-  const maxBasis = tier === "4xl" ? 140 : tier === "3xl" ? 160 : 200
-  const minBasis = tier === "4xl" ? 64 : tier === "3xl" ? 68 : 72
-  const divisor = tier === "4xl" ? 80 : 50
-  return Math.min(maxBasis, minBasis + weight / divisor)
-}
 
 /** Holding period is a separate pane only at ≥1920; below that it shares Activity. */
 export function holdingPeriodSeparate(tier: DensityTier): boolean {

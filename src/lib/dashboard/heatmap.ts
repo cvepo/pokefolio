@@ -66,7 +66,3 @@ export function heatmapFillCss(normalized: number): string {
 }
 
 /** Flex-grow weight from market value; floors at 1 so tiny positions stay visible. */
-export function heatmapSizeWeight(marketValueCents: number): number {
-  if (!Number.isFinite(marketValueCents) || marketValueCents <= 0) return 1
-  return Math.max(1, Math.round(marketValueCents / 100))
-}
