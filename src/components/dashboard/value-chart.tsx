@@ -55,17 +55,17 @@ export function ValueChart({ series, seriesTimeframe, height = 280 }: ValueChart
   })()
 
   return (
-    <div className="border border-border rounded-xl p-5 bg-card">
-      <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+    <div className="border border-border rounded-md p-3 3xl:p-4 bg-card h-full">
+      <div className="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Portfolio value
           </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             Actual vs projected · {seriesTimeframe}
           </p>
         </div>
-        <p className="text-xs text-muted-foreground max-w-md text-right">
+        <p className="text-[11px] text-muted-foreground max-w-md text-right">
           Projected applies today’s holdings to historical prices. Lines may cross —
           that is meaningful.
         </p>
@@ -73,7 +73,7 @@ export function ValueChart({ series, seriesTimeframe, height = 280 }: ValueChart
 
       <div>
         {estimatedSpans.length > 0 && (
-          <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
+          <p className="text-[11px] text-muted-foreground mb-2 flex items-center gap-1.5">
             <span
               aria-hidden
               className="inline-block w-3 h-3 rounded-sm bg-muted-foreground/20 border border-border"
@@ -94,13 +94,16 @@ export function ValueChart({ series, seriesTimeframe, height = 280 }: ValueChart
       ) : (
         /* Fixed height + numeric ResponsiveContainer height avoids scrollbar resize loops */
         <div className="w-full overflow-x-auto">
-          <div className="min-w-[560px]" style={{ height }}>
+          <div className="min-w-[560px] tabular-nums" style={{ height }}>
             <ResponsiveContainer width="100%" height={height}>
               <LineChart data={rows} margin={{ top: 8, right: 16, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{
+                    fontSize: 11,
+                    fill: "hsl(var(--muted-foreground))",
+                  }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => formatSnapshotDate(String(v))}
@@ -108,7 +111,10 @@ export function ValueChart({ series, seriesTimeframe, height = 280 }: ValueChart
                 />
                 <YAxis
                   domain={chartYDomain ?? ["auto", "auto"]}
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{
+                    fontSize: 11,
+                    fill: "hsl(var(--muted-foreground))",
+                  }}
                   tickLine={false}
                   axisLine={false}
                   width={70}
