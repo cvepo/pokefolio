@@ -15,7 +15,6 @@ import type {
   ValueChange,
 } from "@/lib/dashboard/contract"
 import {
-  computeHoldings,
   netQuantityByDate,
   replayHoldings,
 } from "@/lib/holdings"
@@ -165,11 +164,14 @@ export async function publishAnalyticsSnapshot(
     const replayByProduct = new Map(
       [...groups].map(([productId, rows]) => [productId, replayHoldings(rows)])
     )
-    const holdings = [...groups]
-      .map(([productId, rows]) => ({ productId, rows, value: computeHoldings(rows) }))
+    const holdings = [...replayByProduct]
+      .map(([productId, replay]) => ({
+        productId,
+        value: replay.holdings,
+      }))
       .filter(({ value }) => value.netQty > 0)
 
-    const rawPositions = holdings.map(({ productId, rows, value }) => {
+    const rawPositions = holdings.map(({ productId, value }) => {
       const product = productById.get(productId)!
       const history = priceIndex[productId] ?? []
       const latest = history.filter((point) => point.date <= today).at(-1)
@@ -203,7 +205,6 @@ export async function publishAnalyticsSnapshot(
 
       return {
         productId,
-        rows,
         value,
         product,
         current,
@@ -254,39 +255,38 @@ export async function publishAnalyticsSnapshot(
       }
     })
 
-    const allHoldings = [...groups.values()].map(computeHoldings)
+    const allHoldings = [...replayByProduct.values()].map((replay) => replay.holdings)
+    const totalCostBasis = allHoldings.reduce(
+      (sum, holding) => sum + holding.costBasisRemaining,
+      0
+    )
+    const totalRealizedPnl = allHoldings.reduce(
+      (sum, holding) => sum + holding.realizedPnL,
+      0
+    )
+    const netCashFlow = allHoldings.reduce(
+      (sum, holding) => sum - holding.totalInvested + holding.totalProceeds,
+      0
+    )
+    const totalInvested = allHoldings.reduce(
+      (sum, holding) => sum + holding.totalInvested,
+      0
+    )
+    const totalProceeds = allHoldings.reduce(
+      (sum, holding) => sum + holding.totalProceeds,
+      0
+    )
     const summary: PortfolioSummary = {
       totalValue: toCents(totalValueDollars),
-      costBasis: toCents(
-        allHoldings.reduce((sum, holding) => sum + holding.costBasisRemaining, 0)
-      ),
-      unrealizedPnl: toCents(
-        totalValueDollars -
-          allHoldings.reduce((sum, holding) => sum + holding.costBasisRemaining, 0)
-      ),
-      unrealizedPnlPct: allHoldings.reduce(
-        (sum, holding) => sum + holding.costBasisRemaining,
-        0
-      )
-        ? (totalValueDollars -
-            allHoldings.reduce((sum, holding) => sum + holding.costBasisRemaining, 0)) /
-          allHoldings.reduce((sum, holding) => sum + holding.costBasisRemaining, 0)
+      costBasis: toCents(totalCostBasis),
+      unrealizedPnl: toCents(totalValueDollars - totalCostBasis),
+      unrealizedPnlPct: totalCostBasis
+        ? (totalValueDollars - totalCostBasis) / totalCostBasis
         : null,
-      realizedPnl: toCents(
-        allHoldings.reduce((sum, holding) => sum + holding.realizedPnL, 0)
-      ),
-      netCashFlow: toCents(
-        allHoldings.reduce(
-          (sum, holding) => sum - holding.totalInvested + holding.totalProceeds,
-          0
-        )
-      ),
-      totalInvested: toCents(
-        allHoldings.reduce((sum, holding) => sum + holding.totalInvested, 0)
-      ),
-      totalProceeds: toCents(
-        allHoldings.reduce((sum, holding) => sum + holding.totalProceeds, 0)
-      ),
+      realizedPnl: toCents(totalRealizedPnl),
+      netCashFlow: toCents(netCashFlow),
+      totalInvested: toCents(totalInvested),
+      totalProceeds: toCents(totalProceeds),
       positionCount: positions.length,
       unitCount: positions.reduce((sum, position) => sum + position.quantity, 0),
       pricedPositionCount: positions.filter((position) => position.priceStatus === "ok").length,
