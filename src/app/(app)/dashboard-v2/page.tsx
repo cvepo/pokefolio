@@ -122,7 +122,7 @@ export default function DashboardV2Page() {
       ) : payload && envelope ? (
         <div
           className={cn(
-            "grid grid-cols-1 xl:grid-cols-12",
+            "dashboard-v2-grid grid grid-cols-1 xl:grid-cols-12 tabular-nums",
             "gap-4 xl:gap-3 3xl:gap-2.5 4xl:gap-2"
           )}
         >
