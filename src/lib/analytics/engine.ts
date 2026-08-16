@@ -6,7 +6,6 @@ import {
   toCentsOrNull,
 } from "@/lib/dashboard/contract"
 import type {
-  ActivityItem,
   PortfolioAllocation,
   PortfolioPerformance,
   PortfolioSummary,
@@ -15,7 +14,7 @@ import type {
   Timeframe,
   ValueChange,
 } from "@/lib/dashboard/contract"
-import { computeHoldings, computeHoldingsAsOf } from "@/lib/holdings"
+import { computeHoldings, computeHoldingsAsOf, replayHoldings } from "@/lib/holdings"
 import {
   buildPriceIndex,
   daterange,
@@ -25,6 +24,7 @@ import {
 import { computeProjectedSnapshots } from "@/lib/projected-snapshots"
 import type { Product, Transaction } from "@/lib/supabase"
 import { supabase } from "@/lib/supabase-server"
+import { buildActivity } from "./activity"
 import { effectiveCategory } from "./categorize"
 import { computeHoldingPeriod } from "./holding-period"
 import { persistInsightTransitions } from "./insights/persistence"
@@ -157,6 +157,9 @@ export async function publishAnalyticsSnapshot(
       (
         (lastRun as { failures?: Array<{ product_id: string }> } | null)?.failures ?? []
       ).map((failure) => failure.product_id)
+    )
+    const replayByProduct = new Map(
+      [...groups].map(([productId, rows]) => [productId, replayHoldings(rows)])
     )
     const holdings = [...groups]
       .map(([productId, rows]) => ({ productId, rows, value: computeHoldings(rows) }))
@@ -346,41 +349,10 @@ export async function publishAnalyticsSnapshot(
       opts.timeframe ?? "1M"
     )
 
-    const portfolioNames = new Map((portfolios ?? []).map((portfolio) => [portfolio.id, portfolio.name]))
-    const activity: { items: ActivityItem[]; totalCount: number } = {
-      totalCount: txs.length,
-      items: [...txs]
-        .sort(
-          (a, b) =>
-            b.transaction_date.localeCompare(a.transaction_date) ||
-            b.created_at.localeCompare(a.created_at)
-        )
-        .slice(0, 50)
-        .map((tx) => ({
-          transactionId: tx.id,
-          portfolioId: tx.portfolio_id,
-          portfolioName: portfolioNames.get(tx.portfolio_id) ?? "Unknown",
-          productId: tx.product_id,
-          productName: tx.product?.name ?? tx.product_id,
-          setName: tx.product?.set_name ?? "",
-          type: tx.type,
-          quantity: tx.quantity,
-          unitPrice: toCents(tx.price),
-          totalAmount: toCents(Number(tx.price) * tx.quantity),
-          date: tx.transaction_date,
-          realizedPnl:
-            tx.type === "sell"
-              ? toCents(
-                  computeHoldings(
-                    groups
-                      .get(tx.product_id)
-                      ?.filter((row) => row.transaction_date <= tx.transaction_date) ?? []
-                  ).realizedPnL
-                )
-              : null,
-          notes: tx.notes,
-        })),
-    }
+    const portfolioNames = new Map(
+      (portfolios ?? []).map((portfolio) => [portfolio.id, portfolio.name])
+    )
+    const activity = buildActivity(txs, portfolioNames, replayByProduct)
 
     if (positions.length) {
       await supabase.from("snapshot_positions").insert(
