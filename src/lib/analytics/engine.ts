@@ -22,7 +22,7 @@ function dateMinus(date: string, days: number): string {
 function buildPerformance(
   actualByDate: Map<string, number>, projectedByDate: Map<string, number>, today: string,
   requested: Timeframe
-): PortfolioPerformance {
+): PortfolioPerformance & { seriesByTimeframe: Record<Timeframe, PortfolioPerformance["series"]> } {
   const dates = [...new Set([...actualByDate.keys(), ...projectedByDate.keys()])].sort()
   const earliest = dates[0] ?? today
   const endValue = actualByDate.get(today) ?? actualByDate.get([...actualByDate.keys()].sort().at(-1) ?? "") ?? 0
@@ -39,12 +39,15 @@ function buildPerformance(
       hasFullHistory: startDate != null && startDate <= wanted,
     }
   })
-  const cutoff = requested === "MAX" ? earliest : dateMinus(today, TIMEFRAME_DAYS[requested])
-  return {
-    timeframes, seriesTimeframe: requested,
-    series: dates.filter((date) => date >= cutoff && date <= today).map((date) => ({
+  const seriesFor = (timeframe: Timeframe) => {
+    const cutoff = timeframe === "MAX" ? earliest : dateMinus(today, TIMEFRAME_DAYS[timeframe])
+    return dates.filter((date) => date >= cutoff && date <= today).map((date) => ({
       date, actual: toCentsOrNull(actualByDate.get(date)), projected: toCentsOrNull(projectedByDate.get(date)),
-    })),
+    }))
+  }
+  return {
+    timeframes, seriesTimeframe: requested, series: seriesFor(requested),
+    seriesByTimeframe: Object.fromEntries(TIMEFRAMES.map((timeframe) => [timeframe, seriesFor(timeframe)])) as Record<Timeframe, PortfolioPerformance["series"]>,
   }
 }
 
