@@ -24,7 +24,7 @@ export function PortfolioSwitcher({ value, onChange }: PortfolioSwitcherProps) {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label="Portfolio scope"
-      className="px-3 py-2 rounded-md border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      className="px-2 py-1 rounded-sm border border-border bg-card text-xs focus:outline-none focus:ring-1 focus:ring-ring"
     >
       <option value="all">All portfolios</option>
       {portfolios.map((p) => (

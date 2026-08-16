@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
 import {
   CartesianGrid,
   Legend,
@@ -16,18 +17,40 @@ import { centsToDollars } from "@/lib/dashboard/contract"
 import { formatCents } from "@/lib/dashboard/format"
 import { formatSnapshotDate } from "@/lib/utils"
 import { estimatedValuationSpans, valuationBasisLabel } from "@/lib/dashboard/valuation-span"
+import { DashboardPanel } from "@/components/dashboard/panel"
 
 type ValueChartProps = {
   series: PerformancePoint[]
   seriesTimeframe: Timeframe
+  /**
+   * Fallback pixel height until ResizeObserver measures the pane.
+   * Never pass "%" or rely on h-full for ResponsiveContainer.
+   */
+  height?: number
 }
 
 /**
  * Actual (solid) + Projected (dashed), both labelled — PRD §16.
- * Fixed pixel height + numeric ResponsiveContainer height avoids the
- * Compare-chart scrollbar resize loop.
+ * Chart height is a concrete number from ResizeObserver (or fallback) —
+ * never percentage / h-full (scrollbar resize loop).
  */
-export function ValueChart({ series, seriesTimeframe }: ValueChartProps) {
+export function ValueChart({ series, seriesTimeframe, height: fallbackHeight = 200 }: ValueChartProps) {
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [measuredHeight, setMeasuredHeight] = useState(0)
+
+  useEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const next = Math.floor(entries[0]?.contentRect.height ?? 0)
+      if (next > 0) setMeasuredHeight(next)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const height = measuredHeight > 0 ? measuredHeight : fallbackHeight
+
   const rows = series.map((p) => ({
     date: p.date,
     actual: p.actual == null ? null : centsToDollars(p.actual),
@@ -53,49 +76,42 @@ export function ValueChart({ series, seriesTimeframe }: ValueChartProps) {
   })()
 
   return (
-    <div className="border border-border rounded-xl p-5 bg-card">
-      <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
-        <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Portfolio value
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Actual vs projected · {seriesTimeframe}
-          </p>
-        </div>
-        <p className="text-xs text-muted-foreground max-w-md text-right">
-          Projected applies today’s holdings to historical prices. Lines may cross —
-          that is meaningful.
+    <DashboardPanel
+      title={`Portfolio value · ${seriesTimeframe}`}
+      scrollBody={false}
+      actions={
+        <span className="hidden 3xl:inline truncate max-w-[28rem] text-right">
+          Projected = today’s holdings × historical prices
+        </span>
+      }
+      bodyClassName="!p-1.5 gap-1"
+    >
+      {estimatedSpans.length > 0 && (
+        <p className="shrink-0 text-[10px] text-muted-foreground flex items-center gap-1.5 px-0.5">
+          <span
+            aria-hidden
+            className="inline-block w-2.5 h-2.5 rounded-sm bg-muted-foreground/20 border border-border"
+          />
+          Shaded dates valued at cost basis — no market prices yet.
         </p>
-      </div>
-
-      <div>
-        {estimatedSpans.length > 0 && (
-          <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className="inline-block w-3 h-3 rounded-sm bg-muted-foreground/20 border border-border"
-            />
-            Shaded dates are valued at cost basis — Pokéfolio had no market prices for
-            those holdings yet.
-          </p>
-        )}
-      </div>
+      )}
 
       {rows.length < 2 ? (
-        <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+        <div className="flex-1 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
           Not enough history for this window
         </div>
       ) : (
-        /* Fixed height + numeric ResponsiveContainer height avoids scrollbar resize loops */
-        <div className="w-full overflow-x-auto">
-          <div className="min-w-[560px] h-[280px]">
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={rows} margin={{ top: 8, right: 16, left: 4, bottom: 4 }}>
+        <div ref={bodyRef} className="flex-1 min-h-0 min-w-0 w-full">
+          <div className="tabular-nums w-full h-full" style={{ height }}>
+            <ResponsiveContainer width="100%" height={height}>
+              <LineChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{
+                    fontSize: 10,
+                    fill: "hsl(var(--muted-foreground))",
+                  }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => formatSnapshotDate(String(v))}
@@ -103,10 +119,13 @@ export function ValueChart({ series, seriesTimeframe }: ValueChartProps) {
                 />
                 <YAxis
                   domain={chartYDomain ?? ["auto", "auto"]}
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{
+                    fontSize: 10,
+                    fill: "hsl(var(--muted-foreground))",
+                  }}
                   tickLine={false}
                   axisLine={false}
-                  width={70}
+                  width={56}
                   tickFormatter={(v) => `$${Math.round(Number(v)).toLocaleString()}`}
                 />
                 {estimatedSpans.map((span) => (
@@ -123,8 +142,9 @@ export function ValueChart({ series, seriesTimeframe }: ValueChartProps) {
                 <Tooltip content={<ChartTooltip />} />
                 <Legend
                   verticalAlign="top"
-                  height={28}
+                  height={22}
                   formatter={(value) => String(value)}
+                  wrapperStyle={{ fontSize: 10 }}
                 />
                 <Line
                   type="monotone"
@@ -152,7 +172,7 @@ export function ValueChart({ series, seriesTimeframe }: ValueChartProps) {
           </div>
         </div>
       )}
-    </div>
+    </DashboardPanel>
   )
 }
 
@@ -175,9 +195,9 @@ function ChartTooltip({
   // rather than measured — state it in words too.
   const basisNote = valuationBasisLabel(payload[0]?.payload?.actualBasis ?? null)
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-md min-w-[160px]">
-      <p className="font-medium mb-1.5">{formatSnapshotDate(String(label ?? ""))}</p>
-      <ul className="space-y-1">
+    <div className="rounded-sm border border-border bg-card px-2.5 py-1.5 text-[11px] shadow-sm min-w-[150px]">
+      <p className="font-medium mb-1">{formatSnapshotDate(String(label ?? ""))}</p>
+      <ul className="space-y-0.5">
         {payload.map((p) => {
           const key = String(p.dataKey)
           const raw = p.value
@@ -186,10 +206,10 @@ function ChartTooltip({
               ? "—"
               : formatCents(Math.round(Number(raw) * 100))
           return (
-            <li key={key} className="flex items-center justify-between gap-4">
+            <li key={key} className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-1.5">
                 <span
-                  className="w-2 h-2 rounded-full shrink-0"
+                  className="w-2 h-2 rounded-none shrink-0"
                   style={{
                     background: p.color,
                     outline: key === "projected" ? "1px dashed currentColor" : undefined,
@@ -203,7 +223,7 @@ function ChartTooltip({
         })}
       </ul>
       {basisNote && (
-        <p className="mt-1.5 pt-1.5 border-t border-border text-[11px] text-muted-foreground">
+        <p className="mt-1 pt-1 border-t border-border text-[10px] text-muted-foreground">
           {basisNote}
         </p>
       )}

@@ -89,6 +89,9 @@
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Dashboard 2.0 density tiers — beyond Tailwind's default 2xl (96rem / 1536px) */
+  --breakpoint-3xl: 120rem; /* 1920px — 23" */
+  --breakpoint-4xl: 150rem; /* 2400px — 27" */
 }
 
 * {
@@ -98,4 +101,36 @@
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+}
+
+/* Dashboard 2.0 — terminal figures + pane scrollbars */
+.dashboard-v2 .tabular-nums,
+.dashboard-v2 .dashboard-num {
+  font-family: var(--font-dashboard-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Recharts SVG ticks don't inherit HTML tabular-nums reliably */
+.dashboard-v2 .recharts-cartesian-axis-tick text {
+  font-family: var(--font-dashboard-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-pane-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.dashboard-pane-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.dashboard-pane-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+
+.dashboard-pane-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
