@@ -68,91 +68,84 @@ export function heatmapFillCss(normalized: number): string {
 /**
  * How much a tile can show at its measured size.
  *
- * Treemap tiles vary enormously — the largest position can be 20x the smallest —
- * so a single fixed type scale either leaves big tiles looking empty or
- * overflows small ones. Text scales with the tile instead, and content drops in
- * priority order as space runs out.
+ * Treemap tiles vary ~20x in area, so a fixed type scale either leaves the big
+ * ones looking empty or overflows the small ones. Sizes are computed
+ * continuously from the tile's own dimensions and applied as inline pixel
+ * values rather than snapped to a handful of Tailwind classes — a 300px tile
+ * and a 140px tile should not wear the same 11px type.
  *
- * The money figure is the last thing to go and is NEVER truncated: a clipped
- * "$1,420.…" is worse than no figure at all, because it reads as a real number
- * while being wrong. The percentage is dropped before the value, and the
- * tooltip always carries everything (PRD §15).
+ * Content drops in priority order as room runs out: image, then meta, then the
+ * percentage, then the name. The money figure is last and is NEVER truncated —
+ * a clipped "$1,420.…" reads as a real number while being wrong. The tooltip
+ * always carries everything (PRD §15).
  */
 export type HeatmapTileScale = {
-  /** Tailwind class for the product name, or null to hide it. */
-  nameClass: string | null
-  /** Lines the name may wrap to before clamping. */
+  /** Font px for the product name; 0 hides it. */
+  nameFontPx: number
+  /** Lines the name may wrap to. */
   nameLines: number
-  /** Tailwind class for the money figure, or null to hide it. */
-  valueClass: string | null
-  /** Tailwind class for the % change, or null to hide it. */
-  changeClass: string | null
-  /** Show set name + unit count — only where there is real room to fill. */
-  showMeta: boolean
+  /** Font px for the money figure; 0 hides it. */
+  valueFontPx: number
+  /** Font px for the % change; 0 hides it. */
+  changeFontPx: number
+  /** Font px for the "N units · Set" line; 0 hides it. */
+  metaFontPx: number
   /** Thumbnail edge in px; 0 means no image. */
   imageSize: number
 }
 
+function clamp(value: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, value))
+}
+
+/** Widest money string we expect, e.g. "$15,483.48" — used to keep it unclipped. */
+const VALUE_CHARS = 10
+/** Rough advance width of the mono digit font, as a fraction of font size. */
+const MONO_ADVANCE = 0.62
+
 export function heatmapTileScale(width: number, height: number): HeatmapTileScale {
-  if (width >= 190 && height >= 116) {
-    return {
-      nameClass: "text-[13px] leading-tight",
-      nameLines: 3,
-      valueClass: "text-[18px] leading-none",
-      changeClass: "text-[12px]",
-      showMeta: true,
-      imageSize: 44,
-    }
-  }
-  if (width >= 132 && height >= 78) {
-    return {
-      nameClass: "text-[11px] leading-tight",
-      nameLines: 2,
-      valueClass: "text-[14px] leading-none",
-      changeClass: "text-[11px]",
-      showMeta: true,
-      imageSize: 30,
-    }
-  }
-  if (width >= 94 && height >= 54) {
-    return {
-      nameClass: "text-[10px] leading-tight",
-      nameLines: 2,
-      valueClass: "text-[12px] leading-none",
-      changeClass: "text-[10px]",
-      showMeta: false,
-      imageSize: 0,
-    }
-  }
-  if (width >= 68 && height >= 36) {
-    return {
-      nameClass: "text-[9px] leading-tight",
-      nameLines: 1,
-      valueClass: "text-[11px] leading-none",
-      changeClass: null,
-      showMeta: false,
-      imageSize: 0,
-    }
-  }
-  if (width >= 46 && height >= 20) {
-    return {
-      nameClass: null,
-      nameLines: 0,
-      valueClass: "text-[9px] leading-none",
-      changeClass: null,
-      showMeta: false,
-      imageSize: 0,
-    }
-  }
-  // Too small for any honest label — the tooltip still has the full detail.
-  return {
-    nameClass: null,
+  const empty: HeatmapTileScale = {
+    nameFontPx: 0,
     nameLines: 0,
-    valueClass: null,
-    changeClass: null,
-    showMeta: false,
+    valueFontPx: 0,
+    changeFontPx: 0,
+    metaFontPx: 0,
     imageSize: 0,
   }
+  if (width < 44 || height < 18) return empty
+
+  const padding = 12
+  const inner = Math.max(0, width - padding)
+
+  // The value must fit on one line at its own font size, so derive the size
+  // from the available width rather than hoping it fits.
+  const valueFontPx = clamp(Math.floor(inner / (VALUE_CHARS * MONO_ADVANCE)), 9, 22)
+
+  if (width < 68 || height < 34) {
+    return { ...empty, valueFontPx: Math.min(valueFontPx, 11) }
+  }
+
+  const shortSide = Math.min(width, height)
+  const nameFontPx = clamp(Math.floor(shortSide / 7.5), 9, 16)
+
+  // Percentage shares the value's row, so only show it when both fit.
+  const changeFontPx =
+    inner >= valueFontPx * VALUE_CHARS * MONO_ADVANCE + 46
+      ? clamp(Math.round(valueFontPx * 0.72), 9, 13)
+      : 0
+
+  const showMeta = width >= 130 && height >= 82
+  const metaFontPx = showMeta ? clamp(Math.round(nameFontPx * 0.75), 8, 11) : 0
+
+  const imageSize =
+    width >= 120 && height >= 72 ? clamp(Math.round(shortSide * 0.4), 26, 88) : 0
+
+  // Whatever vertical room is left after the figure row and meta line belongs
+  // to the name, so tall tiles wrap onto more lines instead of leaving a void.
+  const reserved = valueFontPx * 1.3 + metaFontPx * 1.4 + 10
+  const nameLines = clamp(Math.floor((height - reserved) / (nameFontPx * 1.25)), 1, 4)
+
+  return { nameFontPx, nameLines, valueFontPx, changeFontPx, metaFontPx, imageSize }
 }
 
 /** TCGplayer product image for a tile-sized thumbnail, or null when unavailable. */

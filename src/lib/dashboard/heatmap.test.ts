@@ -61,39 +61,59 @@ describe("heatmapFillCss", () => {
 
 describe("heatmapTileScale", () => {
   it("gives large tiles large type and a thumbnail so they do not read as empty", () => {
-    const s = heatmapTileScale(320, 200)
-    expect(s.nameClass).toContain("13px")
-    expect(s.valueClass).toContain("18px")
-    expect(s.showMeta).toBe(true)
+    const s = heatmapTileScale(320, 220)
+    expect(s.nameFontPx).toBeGreaterThanOrEqual(14)
+    expect(s.valueFontPx).toBeGreaterThanOrEqual(18)
+    expect(s.metaFontPx).toBeGreaterThan(0)
     expect(s.imageSize).toBeGreaterThan(0)
   })
 
-  it("scales type down as the tile shrinks", () => {
-    const big = heatmapTileScale(320, 200)
-    const mid = heatmapTileScale(140, 90)
-    const small = heatmapTileScale(100, 60)
+  it("scales type and image continuously with the tile, not in fixed jumps", () => {
+    const big = heatmapTileScale(320, 220)
+    const mid = heatmapTileScale(150, 110)
+    const small = heatmapTileScale(110, 70)
+    // Below the cap, each step down in width steps the figure down too.
+    expect(mid.valueFontPx).toBeGreaterThan(small.valueFontPx)
     expect(big.imageSize).toBeGreaterThan(mid.imageSize)
-    expect(mid.imageSize).toBeGreaterThan(small.imageSize)
-    expect(small.showMeta).toBe(false)
+    expect(mid.imageSize).toBeGreaterThan(0)
+  })
+
+  it("caps the money figure so a huge tile does not get absurd type", () => {
+    // Past a point, more width should buy more name lines, not a 40px number.
+    expect(heatmapTileScale(320, 220).valueFontPx).toBe(22)
+    expect(heatmapTileScale(900, 400).valueFontPx).toBe(22)
+  })
+
+  it("gives taller tiles more name lines so the space is used", () => {
+    const short = heatmapTileScale(200, 84)
+    const tall = heatmapTileScale(200, 240)
+    expect(tall.nameLines).toBeGreaterThan(short.nameLines)
+  })
+
+  it("keeps the money figure narrow enough to never clip", () => {
+    // 10 chars at ~0.62em advance must fit the padded width.
+    for (const w of [70, 100, 160, 240, 400]) {
+      const s = heatmapTileScale(w, 120)
+      expect(s.valueFontPx * 10 * 0.62).toBeLessThanOrEqual(w - 12 + 0.5)
+    }
   })
 
   it("drops the percentage before the money figure", () => {
-    // The value is the load-bearing number; the change goes first.
-    const narrow = heatmapTileScale(70, 40)
-    expect(narrow.changeClass).toBeNull()
-    expect(narrow.valueClass).not.toBeNull()
+    const narrow = heatmapTileScale(72, 40)
+    expect(narrow.changeFontPx).toBe(0)
+    expect(narrow.valueFontPx).toBeGreaterThan(0)
   })
 
   it("drops the name before the money figure", () => {
     const tiny = heatmapTileScale(50, 24)
-    expect(tiny.nameClass).toBeNull()
-    expect(tiny.valueClass).not.toBeNull()
+    expect(tiny.nameFontPx).toBe(0)
+    expect(tiny.valueFontPx).toBeGreaterThan(0)
   })
 
   it("shows nothing at all when even a figure could not fit honestly", () => {
     const nano = heatmapTileScale(30, 14)
-    expect(nano.valueClass).toBeNull()
-    expect(nano.nameClass).toBeNull()
+    expect(nano.valueFontPx).toBe(0)
+    expect(nano.nameFontPx).toBe(0)
     expect(nano.imageSize).toBe(0)
   })
 
