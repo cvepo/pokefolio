@@ -3,6 +3,7 @@ import { INSIGHT_DISPLAY_CAP } from "@/lib/dashboard/insights"
 import {
   chartHeightForWidth,
   densityTierForWidth,
+  heatmapTileFlexBasis,
   insightDisplayCapForWidth,
 } from "@/components/dashboard/density"
 
@@ -31,5 +32,15 @@ describe("insightDisplayCapForWidth", () => {
     expect(insightDisplayCapForWidth(1280)).toBe(INSIGHT_DISPLAY_CAP)
     expect(insightDisplayCapForWidth(1920)).toBe(8)
     expect(insightDisplayCapForWidth(2400)).toBe(12)
+  })
+})
+
+describe("heatmapTileFlexBasis", () => {
+  it("caps tile width lower on wider tiers so wrap gains columns", () => {
+    const heavy = 10_000
+    expect(heatmapTileFlexBasis(heavy, "base")).toBe(280)
+    expect(heatmapTileFlexBasis(heavy, "3xl")).toBe(200)
+    expect(heatmapTileFlexBasis(heavy, "4xl")).toBe(160)
+    expect(heatmapTileFlexBasis(0, "4xl")).toBe(72)
   })
 })

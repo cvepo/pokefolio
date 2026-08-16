@@ -9,6 +9,7 @@ import {
   heatmapTileState,
 } from "@/lib/dashboard/heatmap"
 import type { DensityTier } from "@/components/dashboard/density"
+import { heatmapTileFlexBasis } from "@/components/dashboard/density"
 import { cn } from "@/lib/utils"
 
 type HoldingsHeatmapProps = {
@@ -60,13 +61,6 @@ export function HoldingsHeatmap({ positions, tier = "base" }: HoldingsHeatmapPro
   )
 }
 
-function tileFlexBasis(weight: number, tier: DensityTier): number {
-  // Cap tile width lower on wide monitors so the flex wrap gains columns.
-  const maxBasis = tier === "4xl" ? 160 : tier === "3xl" ? 200 : 280
-  const minBasis = tier === "4xl" ? 72 : tier === "3xl" ? 76 : 80
-  return Math.min(maxBasis, minBasis + weight / (tier === "4xl" ? 70 : 40))
-}
-
 function HeatmapTile({
   position,
   domainMin,
@@ -102,7 +96,7 @@ function HeatmapTile({
       title={title}
       style={{
         flexGrow: weight,
-        flexBasis: `${tileFlexBasis(weight, tier)}px`,
+        flexBasis: `${heatmapTileFlexBasis(weight, tier)}px`,
         background: isUnknown ? undefined : fill,
       }}
       className={cn(

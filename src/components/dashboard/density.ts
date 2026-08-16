@@ -39,3 +39,14 @@ export function insightDisplayCapForWidth(width: number): number {
   if (tier === "3xl") return 8
   return INSIGHT_DISPLAY_CAP
 }
+
+/**
+ * Heatmap tile flex-basis — wider tiers cap tile width so wrap gains columns
+ * instead of stretching tiles unboundedly.
+ */
+export function heatmapTileFlexBasis(weight: number, tier: DensityTier): number {
+  const maxBasis = tier === "4xl" ? 160 : tier === "3xl" ? 200 : 280
+  const minBasis = tier === "4xl" ? 72 : tier === "3xl" ? 76 : 80
+  const divisor = tier === "4xl" ? 70 : 40
+  return Math.min(maxBasis, minBasis + weight / divisor)
+}
