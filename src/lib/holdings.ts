@@ -34,12 +34,26 @@ export type Holdings = {
   earliestRemainingBuyDate: string | null
 }
 
+export type HoldingsTransactionResult = {
+  transactionId: string
+  transactionDate: string
+  /** Net quantity immediately after this transaction has been applied. */
+  netQty: number
+  /** FIFO P/L attributable to this transaction alone. null for buys. */
+  realizedPnl: number | null
+}
+
+export type HoldingsReplay = {
+  holdings: Holdings
+  transactions: HoldingsTransactionResult[]
+}
+
 /**
  * Compute holdings from a list of transactions for ONE (portfolio, product) pair, using FIFO.
  * Ignores any over-sell quantity that cannot be matched to buys (caller is expected to
  * block over-selling at the API layer).
  */
-export function computeHoldings(transactions: Transaction[]): Holdings {
+export function replayHoldings(transactions: Transaction[]): HoldingsReplay {
   // Stable sort: by transaction_date asc, then created_at asc as tiebreaker.
   const sorted = [...transactions].sort((a, b) => {
     const d = a.transaction_date.localeCompare(b.transaction_date)
@@ -55,6 +69,8 @@ export function computeHoldings(transactions: Transaction[]): Holdings {
   let totalProceeds = 0
   let profitableSells = 0
   let totalSells = 0
+  let runningNetQty = 0
+  const results: HoldingsTransactionResult[] = []
 
   for (const tx of sorted) {
     if (tx.type === "buy") {
@@ -66,6 +82,13 @@ export function computeHoldings(transactions: Transaction[]): Holdings {
       })
       totalBuyQty += tx.quantity
       totalInvested += Number(tx.price) * tx.quantity
+      runningNetQty += tx.quantity
+      results.push({
+        transactionId: tx.id,
+        transactionDate: tx.transaction_date,
+        netQty: runningNetQty,
+        realizedPnl: null,
+      })
     } else {
       // sell — FIFO consume from oldest non-empty lots
       let toSell = tx.quantity
@@ -80,10 +103,18 @@ export function computeHoldings(transactions: Transaction[]): Holdings {
         toSell -= take
       }
       realizedPnL += realizedThisSell
-      totalSellQty += tx.quantity - toSell // only count what was actually matched
-      totalProceeds += sellPrice * (tx.quantity - toSell)
+      const matchedQuantity = tx.quantity - toSell
+      totalSellQty += matchedQuantity // only count what was actually matched
+      totalProceeds += sellPrice * matchedQuantity
       totalSells += 1
       if (realizedThisSell > 0) profitableSells += 1
+      runningNetQty -= matchedQuantity
+      results.push({
+        transactionId: tx.id,
+        transactionDate: tx.transaction_date,
+        netQty: runningNetQty,
+        realizedPnl: realizedThisSell,
+      })
     }
   }
 
@@ -94,19 +125,52 @@ export function computeHoldings(transactions: Transaction[]): Holdings {
   const earliestRemainingBuyDate = remainingLots.length ? remainingLots[0].buyDate : null
 
   return {
-    netQty,
-    totalBuyQty,
-    totalSellQty,
-    totalInvested,
-    totalProceeds,
-    costBasisRemaining,
-    avgCostRemaining,
-    realizedPnL,
-    profitableSells,
-    totalSells,
-    lots: remainingLots,
-    earliestRemainingBuyDate,
+    holdings: {
+      netQty,
+      totalBuyQty,
+      totalSellQty,
+      totalInvested,
+      totalProceeds,
+      costBasisRemaining,
+      avgCostRemaining,
+      realizedPnL,
+      profitableSells,
+      totalSells,
+      lots: remainingLots,
+      earliestRemainingBuyDate,
+    },
+    transactions: results,
   }
+}
+
+export function computeHoldings(transactions: Transaction[]): Holdings {
+  return replayHoldings(transactions).holdings
+}
+
+/**
+ * Carry a completed FIFO replay across an ordered date range without replaying
+ * transaction history for every date.
+ */
+export function netQuantityByDate(
+  transactions: HoldingsTransactionResult[],
+  dates: string[]
+): Map<string, number> {
+  const quantities = new Map<string, number>()
+  let transactionIndex = 0
+  let netQty = 0
+
+  for (const date of dates) {
+    while (
+      transactionIndex < transactions.length &&
+      transactions[transactionIndex].transactionDate <= date
+    ) {
+      netQty = transactions[transactionIndex].netQty
+      transactionIndex += 1
+    }
+    quantities.set(date, netQty)
+  }
+
+  return quantities
 }
 
 /** Holdings as of a specific date (inclusive). Used for snapshot rebuild. */

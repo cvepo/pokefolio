@@ -54,14 +54,14 @@ export const SYNC_CRON_UTC_HOUR = 9
  * before. Surfacing both sides is the difference between that being a
  * documented behaviour and looking like an off-by-one bug.
  */
-export function describeSyncTime(scheduleTimeZone: string): {
+export function describeSyncTime(scheduleTimeZone: string, at: Date = new Date()): {
   scheduleLabel: string
   localLabel: string
   localTimeZone: string
   differentDay: boolean
 } {
   // Reference instant: today's cron firing, in UTC.
-  const ref = new Date()
+  const ref = new Date(at)
   ref.setUTCHours(SYNC_CRON_UTC_HOUR, 0, 0, 0)
 
   const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone

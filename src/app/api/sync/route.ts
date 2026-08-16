@@ -10,6 +10,7 @@ import {
   weekdayInTimeZone,
 } from "@/lib/sync-log"
 import type { SyncTrigger } from "@/lib/supabase"
+import { publishAnalyticsSnapshot } from "@/lib/analytics/engine"
 
 // Vercel Hobby's default function timeout is 10s, which isn't enough once we
 // have ~20 products. Cap at 60s (the Hobby maximum).
@@ -269,6 +270,17 @@ async function syncPrices(trigger: SyncTrigger) {
       api_monthly_remaining: apiUsage?.apiRequestsRemaining ?? null,
       failures,
     })
+
+    // Analytics is derived exclusively from the data persisted above. Publish
+    // combined and per-portfolio scopes only after the sync log is complete.
+    await publishAnalyticsSnapshot({ source: { syncRunId: runId ?? undefined } })
+    const { data: portfolioRows } = await supabase.from("portfolios").select("id")
+    for (const portfolio of portfolioRows ?? []) {
+      await publishAnalyticsSnapshot({
+        portfolioId: portfolio.id,
+        source: { syncRunId: runId ?? undefined },
+      })
+    }
 
     return NextResponse.json({
       ok: true,
