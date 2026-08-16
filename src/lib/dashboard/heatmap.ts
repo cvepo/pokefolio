@@ -148,9 +148,15 @@ export function heatmapTileScale(width: number, height: number): HeatmapTileScal
   return { nameFontPx, nameLines, valueFontPx, changeFontPx, metaFontPx, imageSize }
 }
 
-/** TCGplayer product image for a tile-sized thumbnail, or null when unavailable. */
+/**
+ * Background-removed product thumbnail for a tile, or null when unavailable.
+ *
+ * Points at our own route rather than TCGplayer directly: their JPEGs carry a
+ * solid white studio background, which reads as a pasted rectangle on a dark
+ * tile. The route serves a cut-out PNG cached in Supabase Storage.
+ */
 export function heatmapImageUrl(tcgplayerId: string | null, size: number): string | null {
   if (!tcgplayerId || size <= 0) return null
-  const fit = size <= 32 ? 64 : 128
-  return `https://product-images.tcgplayer.com/fit-in/${fit}x${fit}/${tcgplayerId}.jpg`
+  // Request at 2x so the thumbnail stays sharp on a retina display.
+  return `/api/product-image/${tcgplayerId}?size=${Math.min(256, Math.max(64, size * 2))}`
 }

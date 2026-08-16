@@ -250,9 +250,9 @@ function HeatmapTile({
 }
 
 /**
- * TCGplayer product shots are JPEGs on a white background. The white chip plus
- * multiply blending makes that background read as part of the thumbnail rather
- * than a pasted rectangle.
+ * Product thumbnail. The image arrives from /api/product-image with its white
+ * studio background already cut out, so it needs no chip or blend mode behind
+ * it — it sits directly on the tile colour.
  */
 function ProductThumb({
   url,
@@ -264,20 +264,20 @@ function ProductThumb({
   onError: () => void
 }) {
   return (
-    <span
-      className="rounded-sm bg-white overflow-hidden flex items-center justify-center"
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={url}
+      alt=""
+      aria-hidden
+      onError={onError}
+      /* Not lazy: the dashboard is locked to one viewport, so every tile is on
+         screen from the start and deferring only delays the paint. */
+      decoding="async"
+      width={size}
+      height={size}
+      className="object-contain drop-shadow-sm"
       style={{ width: size, height: size }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={url}
-        alt=""
-        aria-hidden
-        loading="lazy"
-        onError={onError}
-        className="w-full h-full object-contain mix-blend-multiply"
-      />
-    </span>
+    />
   )
 }
 

@@ -129,9 +129,20 @@ describe("heatmapImageUrl", () => {
     expect(heatmapImageUrl("123", 0)).toBeNull()
   })
 
-  it("requests a larger source for larger thumbnails", () => {
-    expect(heatmapImageUrl("123", 30)).toContain("64x64")
-    expect(heatmapImageUrl("123", 44)).toContain("128x128")
-    expect(heatmapImageUrl("123", 44)).toContain("/123.jpg")
+  it("points at our cutout route, not TCGplayer directly", () => {
+    // Going straight to TCGplayer would put a solid white JPEG background on a
+    // dark tile; the route serves a background-removed PNG instead.
+    const url = heatmapImageUrl("123", 44)!
+    expect(url).toContain("/api/product-image/123")
+    expect(url).not.toContain("tcgplayer.com")
+  })
+
+  it("requests 2x the tile size so thumbnails stay sharp on retina", () => {
+    expect(heatmapImageUrl("123", 40)).toContain("size=80")
+  })
+
+  it("clamps the requested size to the cached renditions", () => {
+    expect(heatmapImageUrl("123", 10)).toContain("size=64")
+    expect(heatmapImageUrl("123", 400)).toContain("size=256")
   })
 })
