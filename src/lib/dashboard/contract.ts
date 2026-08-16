@@ -173,10 +173,28 @@ export type ValueChange = {
  * which is meaningful rather than a rendering bug. Either may be null on dates
  * where that series has no data — render a gap, do not interpolate to 0.
  */
+/**
+ * How `actual` was valued on this date.
+ *
+ * Pokéfolio only knows prices from the day it started tracking a product, but
+ * holdings predate that. Valuing those days at 0 would corrupt the chart (PRD
+ * §12 forbids treating a missing price as zero), and valuing them at cost
+ * without saying so is the silent substitution PRD §8 forbids. So the value
+ * falls back to cost basis — matching what `/dashboard` and `/data` already do
+ * — and the basis is reported alongside it so the UI can mark the span.
+ *
+ * "market"  — every held position had a real recorded price.
+ * "partial" — some positions priced, the rest valued at cost basis.
+ * "cost"    — nothing held that day had a price yet; entirely cost basis.
+ */
+export type ValuationBasis = "market" | "partial" | "cost"
+
 export type PerformancePoint = {
   date: IsoDate
   actual: Cents | null
   projected: Cents | null
+  /** Basis for `actual`. null when `actual` is null (nothing held). */
+  actualBasis: ValuationBasis | null
 }
 
 export type PortfolioPerformance = {
