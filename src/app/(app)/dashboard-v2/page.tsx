@@ -1,22 +1,33 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { AlertCircle, LayoutDashboard } from "lucide-react"
 import { FIXTURE_ENVELOPE } from "@/lib/dashboard/fixtures"
 import type { DashboardPayload, Timeframe } from "@/lib/dashboard/contract"
 import { useDashboard } from "@/lib/dashboard/use-dashboard"
+import { PortfolioSwitcher } from "@/components/dashboard/portfolio-switcher"
+import { ValueHeader } from "@/components/dashboard/value-header"
+import { TimeframeRow } from "@/components/dashboard/timeframe-row"
+import { ValueChart } from "@/components/dashboard/value-chart"
+import { WhatChanged } from "@/components/dashboard/what-changed"
+import { PortfolioStrip } from "@/components/dashboard/portfolio-strip"
+import { AllocationPanel } from "@/components/dashboard/allocation-panel"
+import { RecentActivity } from "@/components/dashboard/recent-activity"
+import { HoldingsHeatmap } from "@/components/dashboard/holdings-heatmap"
+import { HoldingPeriodSummary } from "@/components/dashboard/holding-period"
 
 /**
  * Dashboard 2.0 parallel route (decisions.md A6).
- * Shell only — sections land in follow-up commits in PRD §10 order.
+ * Reading order follows PRD §10: value → Value Change → What Changed → rest.
  */
 export default function DashboardV2Page() {
-  const [portfolioId] = useState<string | undefined>(undefined)
-  const [timeframe] = useState<Timeframe>("1M")
+  const [portfolioId, setPortfolioId] = useState<string | undefined>(undefined)
+  const [timeframe, setTimeframe] = useState<Timeframe>("1M")
   const [useFixture, setUseFixture] = useState(false)
 
   const { data, loading, error, refresh } = useDashboard({ portfolioId, timeframe })
 
+  // Fall back to fixtures when the BFF is absent so every section is reviewable.
   useEffect(() => {
     if (error && !data) setUseFixture(true)
     if (data) setUseFixture(false)
@@ -25,19 +36,34 @@ export default function DashboardV2Page() {
   const envelope = data ?? (useFixture ? FIXTURE_ENVELOPE : null)
   const payload: DashboardPayload | null = envelope?.data ?? null
 
+  const primaryChange = useMemo(() => {
+    if (!payload) return null
+    return (
+      payload.performance.timeframes.find((t) => t.timeframe === timeframe) ??
+      payload.performance.timeframes.find((t) => t.timeframe === "1M") ??
+      null
+    )
+  }, [payload, timeframe])
+
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <LayoutDashboard size={22} />
-          Dashboard
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">
-            v2
-          </span>
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Portfolio check-in — Value Change, not return
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <LayoutDashboard size={22} />
+            Dashboard
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">
+              v2
+            </span>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Portfolio check-in — Value Change, not return
+          </p>
+        </div>
+        <PortfolioSwitcher
+          value={portfolioId ?? "all"}
+          onChange={(id) => setPortfolioId(id === "all" ? undefined : id)}
+        />
       </div>
 
       {useFixture && (
@@ -69,20 +95,38 @@ export default function DashboardV2Page() {
           </button>
         </div>
       ) : payload && envelope ? (
-        <div className="space-y-4 text-sm text-muted-foreground border border-dashed border-border rounded-xl p-6">
-          <p className="font-medium text-foreground">Information hierarchy (PRD §10)</p>
-          <ol className="list-decimal list-inside space-y-1">
-            <li>Value + freshness header</li>
-            <li>Value chart (Actual / Projected)</li>
-            <li>Timeframe row — all six windows</li>
-            <li>What Changed</li>
-            <li>Portfolio strip · Allocation · Activity · Heatmap · Holding period</li>
-          </ol>
-          <p className="text-xs">
-            Snapshot {envelope.snapshotId} · as of {envelope.asOf} ·{" "}
-            {payload.summary.positionCount} positions
-          </p>
-        </div>
+        <>
+          <ValueHeader
+            summary={payload.summary}
+            primaryChange={primaryChange}
+            sync={payload.sync}
+            asOf={envelope.asOf}
+          />
+
+          <ValueChart
+            series={payload.performance.series}
+            seriesTimeframe={timeframe}
+          />
+
+          <TimeframeRow
+            timeframes={payload.performance.timeframes}
+            active={timeframe}
+            onSelect={setTimeframe}
+          />
+
+          <WhatChanged insights={payload.insights} />
+
+          <PortfolioStrip summary={payload.summary} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <AllocationPanel allocation={payload.allocation} />
+            <RecentActivity activity={payload.activity} />
+          </div>
+
+          <HoldingsHeatmap positions={payload.positions} />
+
+          <HoldingPeriodSummary positions={payload.positions.positions} />
+        </>
       ) : null}
     </div>
   )
