@@ -4,6 +4,7 @@ import {
   chartHeightForWidth,
   densityTierForWidth,
   heatmapTileFlexBasis,
+  holdingPeriodSeparate,
   insightDisplayCapForWidth,
 } from "@/components/dashboard/density"
 
@@ -20,27 +21,36 @@ describe("densityTierForWidth", () => {
 })
 
 describe("chartHeightForWidth", () => {
-  it("returns concrete pixel heights per tier", () => {
-    expect(chartHeightForWidth(1280)).toBe(280)
-    expect(chartHeightForWidth(1920)).toBe(340)
-    expect(chartHeightForWidth(2400)).toBe(400)
+  it("returns concrete pixel fallback heights per tier", () => {
+    expect(chartHeightForWidth(1280)).toBe(200)
+    expect(chartHeightForWidth(1920)).toBe(260)
+    expect(chartHeightForWidth(2400)).toBe(320)
   })
 })
 
 describe("insightDisplayCapForWidth", () => {
   it("raises the display cap at 3xl/4xl without changing the base default", () => {
     expect(insightDisplayCapForWidth(1280)).toBe(INSIGHT_DISPLAY_CAP)
-    expect(insightDisplayCapForWidth(1920)).toBe(8)
-    expect(insightDisplayCapForWidth(2400)).toBe(12)
+    expect(insightDisplayCapForWidth(1920)).toBe(10)
+    expect(insightDisplayCapForWidth(2400)).toBe(16)
   })
 })
 
 describe("heatmapTileFlexBasis", () => {
   it("caps tile width lower on wider tiers so wrap gains columns", () => {
     const heavy = 10_000
-    expect(heatmapTileFlexBasis(heavy, "base")).toBe(280)
-    expect(heatmapTileFlexBasis(heavy, "3xl")).toBe(200)
-    expect(heatmapTileFlexBasis(heavy, "4xl")).toBe(160)
-    expect(heatmapTileFlexBasis(0, "4xl")).toBe(72)
+    expect(heatmapTileFlexBasis(heavy, "base")).toBe(200)
+    expect(heatmapTileFlexBasis(heavy, "3xl")).toBe(160)
+    expect(heatmapTileFlexBasis(heavy, "4xl")).toBe(140)
+    expect(heatmapTileFlexBasis(0, "4xl")).toBe(64)
+  })
+})
+
+describe("holdingPeriodSeparate", () => {
+  it("keeps Holding period tabbed with Activity below 1920", () => {
+    expect(holdingPeriodSeparate("base")).toBe(false)
+    expect(holdingPeriodSeparate("xl")).toBe(false)
+    expect(holdingPeriodSeparate("3xl")).toBe(true)
+    expect(holdingPeriodSeparate("4xl")).toBe(true)
   })
 })

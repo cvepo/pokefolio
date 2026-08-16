@@ -4,6 +4,8 @@
  * Breakpoints match globals.css `--breakpoint-3xl` / `--breakpoint-4xl`
  * (1920px / 2400px). Chart heights stay concrete pixel numbers for
  * ResponsiveContainer — never percentages (scrollbar resize loop).
+ * Prefer ResizeObserver-measured pane height when available; these
+ * values are fallbacks only.
  */
 
 import { INSIGHT_DISPLAY_CAP } from "@/lib/dashboard/insights"
@@ -21,12 +23,15 @@ export function densityTierForWidth(width: number): DensityTier {
   return "base"
 }
 
-/** Numeric chart height for ResponsiveContainer — never "%" / h-full. */
+/**
+ * Fallback chart height when the pane has not been measured yet.
+ * Live chart uses ResizeObserver — never pass "%" / h-full.
+ */
 export function chartHeightForWidth(width: number): number {
   const tier = densityTierForWidth(width)
-  if (tier === "4xl") return 400
-  if (tier === "3xl") return 340
-  return 280
+  if (tier === "4xl") return 320
+  if (tier === "3xl") return 260
+  return 200
 }
 
 /**
@@ -35,8 +40,8 @@ export function chartHeightForWidth(width: number): number {
  */
 export function insightDisplayCapForWidth(width: number): number {
   const tier = densityTierForWidth(width)
-  if (tier === "4xl") return 12
-  if (tier === "3xl") return 8
+  if (tier === "4xl") return 16
+  if (tier === "3xl") return 10
   return INSIGHT_DISPLAY_CAP
 }
 
@@ -45,8 +50,13 @@ export function insightDisplayCapForWidth(width: number): number {
  * instead of stretching tiles unboundedly.
  */
 export function heatmapTileFlexBasis(weight: number, tier: DensityTier): number {
-  const maxBasis = tier === "4xl" ? 160 : tier === "3xl" ? 200 : 280
-  const minBasis = tier === "4xl" ? 72 : tier === "3xl" ? 76 : 80
-  const divisor = tier === "4xl" ? 70 : 40
+  const maxBasis = tier === "4xl" ? 140 : tier === "3xl" ? 160 : 200
+  const minBasis = tier === "4xl" ? 64 : tier === "3xl" ? 68 : 72
+  const divisor = tier === "4xl" ? 80 : 50
   return Math.min(maxBasis, minBasis + weight / divisor)
+}
+
+/** Holding period is a separate pane only at ≥1920; below that it shares Activity. */
+export function holdingPeriodSeparate(tier: DensityTier): boolean {
+  return tier === "3xl" || tier === "4xl"
 }
