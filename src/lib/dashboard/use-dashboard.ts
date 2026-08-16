@@ -19,6 +19,8 @@ export type UseDashboardResult = {
   loading: boolean
   error: string | null
   errorCode: ApiError["code"] | null
+  /** Actionable next step from the API, when it knows one. */
+  errorHint: string | null
   refresh: () => Promise<void>
   /** Echo of the query used for the last successful or attempted fetch. */
   portfolioId: string | undefined
@@ -46,6 +48,7 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRes
   const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<ApiError["code"] | null>(null)
+  const [errorHint, setErrorHint] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!enabled) {
@@ -55,6 +58,7 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRes
     setLoading(true)
     setError(null)
     setErrorCode(null)
+    setErrorHint(null)
     try {
       const res = await fetch(buildUrl(portfolioId, timeframe))
       const body = (await res.json().catch(() => null)) as
@@ -67,6 +71,7 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRes
         setData(null)
         setError(apiErr?.error ?? `Failed to load dashboard (${res.status})`)
         setErrorCode(apiErr?.code ?? (res.status === 404 ? "not_found" : "internal"))
+        setErrorHint(apiErr?.hint ?? null)
         return
       }
 
@@ -74,6 +79,7 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRes
         setData(null)
         setError("Malformed dashboard response")
         setErrorCode("internal")
+        setErrorHint(null)
         return
       }
 
@@ -82,6 +88,7 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRes
       setData(null)
       setError(e instanceof Error ? e.message : "Failed to load dashboard")
       setErrorCode("internal")
+      setErrorHint(null)
     } finally {
       setLoading(false)
     }
@@ -96,6 +103,7 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRes
     loading,
     error,
     errorCode,
+    errorHint,
     refresh,
     portfolioId,
     timeframe,

@@ -91,8 +91,17 @@ export type ApiEnvelope<T> = {
 /** Error shape. Endpoints return this with a non-2xx status. */
 export type ApiError = {
   error: string
-  /** Present when the failure is "no published snapshot exists yet". */
-  code?: "no_snapshot" | "not_found" | "unauthorized" | "internal"
+  /**
+   * `schema_missing` — the analytics tables have not been migrated yet.
+   * `no_snapshot`    — migrated, but nothing has published a snapshot yet.
+   *
+   * These are deliberately distinct: they look identical to a user staring at
+   * an empty dashboard, but the fixes are completely different, and a generic
+   * "unavailable" sends people debugging the wrong layer.
+   */
+  code?: "schema_missing" | "no_snapshot" | "not_found" | "unauthorized" | "internal"
+  /** What to actually do about it, when that is knowable. */
+  hint?: string
 }
 
 // ---------------------------------------------------------------------------

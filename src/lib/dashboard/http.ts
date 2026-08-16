@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { TIMEFRAMES, type Timeframe } from "./contract"
-import { NoPublishedSnapshotError } from "./data"
+import { AnalyticsSchemaMissingError, NoPublishedSnapshotError } from "./data"
 
 export function query(request: Request) {
   const params = new URL(request.url).searchParams
@@ -22,9 +22,26 @@ export async function response<T>(work: () => Promise<T>) {
   try {
     return NextResponse.json(await work())
   } catch (error) {
+    // A dashboard that cannot load should say which of the two setup steps is
+    // missing. Both look like an empty page, but one needs SQL run and the
+    // other needs a sync — telling them apart saves debugging the wrong layer.
+    if (error instanceof AnalyticsSchemaMissingError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "schema_missing",
+          hint: "Run supabase/migrations/005-008 in the Supabase SQL editor, then sync.",
+        },
+        { status: 503 }
+      )
+    }
     if (error instanceof NoPublishedSnapshotError) {
       return NextResponse.json(
-        { error: error.message, code: "no_snapshot" },
+        {
+          error: error.message,
+          code: "no_snapshot",
+          hint: "Run a sync, or add/edit a transaction, to publish the first snapshot.",
+        },
         { status: 503 }
       )
     }

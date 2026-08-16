@@ -25,7 +25,7 @@ export default function DashboardV2Page() {
   const [timeframe, setTimeframe] = useState<Timeframe>("1M")
   const [useFixture, setUseFixture] = useState(false)
 
-  const { data, loading, error, refresh } = useDashboard({ portfolioId, timeframe })
+  const { data, loading, error, errorHint, refresh } = useDashboard({ portfolioId, timeframe })
 
   // Fixtures render every section — including the stale, unknown and
   // missing-history states — without a database behind them.
@@ -100,6 +100,12 @@ export default function DashboardV2Page() {
           <AlertCircle className="mx-auto text-muted-foreground" size={28} />
           <p className="font-medium">Couldn’t load the dashboard</p>
           <p className="text-sm text-muted-foreground">{error}</p>
+          {errorHint && (
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              <span className="font-medium text-foreground">Next step: </span>
+              {errorHint}
+            </p>
+          )}
           <button
             type="button"
             onClick={() => refresh()}

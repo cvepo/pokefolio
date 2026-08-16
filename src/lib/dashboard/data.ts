@@ -27,6 +27,21 @@ type Snapshot = {
 
 export class NoPublishedSnapshotError extends Error {}
 
+/** The analytics tables do not exist yet — migrations 005-008 are unapplied. */
+export class AnalyticsSchemaMissingError extends Error {}
+
+/**
+ * Postgres reports an unknown relation as 42P01; PostgREST surfaces the same
+ * condition as a schema-cache miss. Either way it means the migration has not
+ * been run, which is a setup step rather than a fault.
+ */
+export function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === "42P01" || error.code === "PGRST205") return true
+  const message = error.message ?? ""
+  return /Could not find the table|does not exist|schema cache/i.test(message)
+}
+
 export async function latestSnapshot(portfolioId?: string): Promise<Snapshot> {
   let query = supabase
     .from("analytics_snapshots")
@@ -39,7 +54,14 @@ export async function latestSnapshot(portfolioId?: string): Promise<Snapshot> {
     : query.is("scope_portfolio_id", null)
 
   const { data, error } = await query.maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (isMissingTableError(error)) {
+      throw new AnalyticsSchemaMissingError(
+        "The Dashboard 2.0 analytics tables do not exist yet"
+      )
+    }
+    throw new Error(error.message)
+  }
   if (!data) {
     throw new NoPublishedSnapshotError("No published analytics snapshot exists for this scope")
   }
