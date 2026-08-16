@@ -128,3 +128,49 @@ where possible, `IF NOT EXISTS` throughout, and RLS enabled to match
 both. It is the sole coordination point between the two branches — the frontend
 builds against fixtures typed by it while the backend builds the endpoints that
 satisfy it.
+
+Both branches merged into `main` with no conflicts. Neither agent edited the
+contract; the contract-as-types approach held, and the two halves compiled
+together on the first attempt.
+
+---
+
+## Integration status — what is NOT yet verified
+
+Everything below is green: `tsc --noEmit` clean, 99 tests passing, production
+build compiling, `/dashboard` and `/dashboard-v2` coexisting.
+
+None of that touches a database. **The following remain open and cannot be
+closed by CI:**
+
+1. **Migrations 005–008 have never been applied.** They are files only, per A7.
+   Until they are run in the Supabase SQL editor, every new endpoint returns
+   503 `no_snapshot` and `/dashboard-v2` shows its error state. Apply them in
+   order.
+
+2. **No snapshot exists until something publishes one.** The engine is wired to
+   price sync and to transaction mutations (PRD §7), so the first sync or the
+   first transaction edit after migrating will publish one. Nothing renders
+   before that.
+
+3. **PRD §21 parity is UNVERIFIED.** This is the important one. The acceptance
+   criterion is that the new dashboard's figures match the existing Data and
+   Compare pages exactly. Both now compute FIFO through the same
+   `computeHoldings`, so they *should* agree — but "should" is not "does," and
+   the whole point of building at a parallel route (A6) was to check rather than
+   assume. Compare cost basis, unrealized P/L, realized P/L and net cash flow
+   across `/data` and `/dashboard-v2` before swapping the routes.
+
+4. **The category fixture is not the real catalog.** `categorize.test.ts` pins
+   category inference against product names taken from repository history and
+   the PRD, because the build environment could not export the live catalog.
+   PRD §13 explicitly wants the rules tested against the *full* known catalog so
+   a new set's naming convention cannot silently land in Uncategorized. Export
+   the real `products.name` list and extend the fixture.
+
+5. **`POST /api/insights/seen` has no response type in the contract.** It
+   returns `{ ok: true, updated: number }`. Add it to `contract.ts` at the next
+   contract revision rather than leaving it implicit.
+
+Only after 1–4 should `/dashboard` be replaced by `/dashboard-v2` and the old
+page deleted.
