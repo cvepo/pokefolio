@@ -15,15 +15,20 @@ import { AllocationPanel } from "@/components/dashboard/allocation-panel"
 import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { HoldingsHeatmap } from "@/components/dashboard/holdings-heatmap"
 import { HoldingPeriodSummary } from "@/components/dashboard/holding-period"
+import { useDashboardDensity } from "@/components/dashboard/use-density"
+import { cn } from "@/lib/utils"
 
 /**
  * Dashboard 2.0 parallel route (decisions.md A6).
  * Reading order follows PRD §10: value → Value Change → What Changed → rest.
+ * Grid spans claim horizontal space on 15"/23"/27" while keeping that priority
+ * top-left and largest at every tier.
  */
 export default function DashboardV2Page() {
   const [portfolioId, setPortfolioId] = useState<string | undefined>(undefined)
   const [timeframe, setTimeframe] = useState<Timeframe>("1M")
   const [useFixture, setUseFixture] = useState(false)
+  const density = useDashboardDensity()
 
   const { data, loading, error, errorHint, refresh } = useDashboard({ portfolioId, timeframe })
 
@@ -57,17 +62,17 @@ export default function DashboardV2Page() {
   }, [payload, timeframe])
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-6">
+    <div className="w-full max-w-dashboard mx-auto p-4 xl:p-5 3xl:p-6 space-y-4 xl:space-y-3 3xl:space-y-2.5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <LayoutDashboard size={22} />
+          <h1 className="text-lg xl:text-xl font-bold flex items-center gap-2">
+            <LayoutDashboard size={18} />
             Dashboard
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">
               v2
             </span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Portfolio check-in — Value Change, not return
           </p>
         </div>
@@ -78,7 +83,7 @@ export default function DashboardV2Page() {
       </div>
 
       {useFixture && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <div>
             <p className="font-medium">
@@ -96,7 +101,7 @@ export default function DashboardV2Page() {
       {loading && !payload ? (
         <DashboardSkeleton />
       ) : error && !payload ? (
-        <div className="rounded-xl border border-dashed border-border p-10 text-center space-y-3">
+        <div className="rounded-lg border border-dashed border-border p-10 text-center space-y-3">
           <AlertCircle className="mx-auto text-muted-foreground" size={28} />
           <p className="font-medium">Couldn’t load the dashboard</p>
           <p className="text-sm text-muted-foreground">{error}</p>
@@ -115,38 +120,67 @@ export default function DashboardV2Page() {
           </button>
         </div>
       ) : payload && envelope ? (
-        <>
-          <ValueHeader
-            summary={payload.summary}
-            primaryChange={primaryChange}
-            sync={payload.sync}
-            asOf={envelope.asOf}
-          />
+        <div
+          className={cn(
+            "grid grid-cols-1 xl:grid-cols-12",
+            "gap-4 xl:gap-3 3xl:gap-2.5 4xl:gap-2"
+          )}
+        >
+          {/* Ticker: value + Value Change windows + freshness — §10 Q1/Q2 */}
+          <div className="col-span-1 xl:col-span-12 order-1 space-y-3 xl:space-y-2">
+            <ValueHeader
+              summary={payload.summary}
+              primaryChange={primaryChange}
+              sync={payload.sync}
+              asOf={envelope.asOf}
+            />
+            <TimeframeRow
+              timeframes={payload.performance.timeframes}
+              active={timeframe}
+              onSelect={setTimeframe}
+            />
+          </div>
 
-          <ValueChart
-            series={payload.performance.series}
-            seriesTimeframe={timeframe}
-          />
+          <div className="col-span-1 xl:col-span-8 3xl:col-span-7 4xl:col-span-6 order-2 min-w-0">
+            <ValueChart
+              series={payload.performance.series}
+              seriesTimeframe={timeframe}
+              height={density.chartHeight}
+            />
+          </div>
 
-          <TimeframeRow
-            timeframes={payload.performance.timeframes}
-            active={timeframe}
-            onSelect={setTimeframe}
-          />
+          <div className="col-span-1 xl:col-span-4 3xl:col-span-3 4xl:col-span-3 order-3 min-w-0">
+            <WhatChanged insights={payload.insights} displayCap={density.insightCap} />
+          </div>
 
-          <WhatChanged insights={payload.insights} />
+          {/*
+            Portfolio strip: full width on laptop; narrow sidebar on 23";
+            half-width bottom row on 27". order jumps at 4xl so Allocation
+            can sit beside the chart instead.
+          */}
+          <div className="col-span-1 xl:col-span-12 3xl:col-span-2 4xl:col-span-6 order-4 4xl:order-7 min-w-0">
+            <PortfolioStrip
+              summary={payload.summary}
+              compact={density.tier === "3xl"}
+            />
+          </div>
 
-          <PortfolioStrip summary={payload.summary} />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="col-span-1 xl:col-span-6 3xl:col-span-4 4xl:col-span-3 order-5 4xl:order-4 min-w-0">
             <AllocationPanel allocation={payload.allocation} />
+          </div>
+
+          <div className="col-span-1 xl:col-span-6 3xl:col-span-4 4xl:col-span-4 order-6 min-w-0">
             <RecentActivity activity={payload.activity} />
           </div>
 
-          <HoldingsHeatmap positions={payload.positions} />
+          <div className="col-span-1 xl:col-span-12 4xl:col-span-8 order-7 3xl:order-8 4xl:order-5 min-w-0">
+            <HoldingsHeatmap positions={payload.positions} tier={density.tier} />
+          </div>
 
-          <HoldingPeriodSummary positions={payload.positions.positions} />
-        </>
+          <div className="col-span-1 xl:col-span-12 3xl:col-span-4 4xl:col-span-6 order-8 3xl:order-7 4xl:order-8 min-w-0">
+            <HoldingPeriodSummary positions={payload.positions.positions} />
+          </div>
+        </div>
       ) : null}
     </div>
   )
@@ -154,18 +188,13 @@ export default function DashboardV2Page() {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="h-10 w-56 bg-muted rounded animate-pulse" />
-        <div className="h-5 w-72 bg-muted rounded animate-pulse" />
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
+      <div className="col-span-1 xl:col-span-12 space-y-2">
+        <div className="h-9 w-56 bg-muted rounded animate-pulse" />
+        <div className="h-14 bg-muted rounded-md animate-pulse" />
       </div>
-      <div className="h-64 bg-muted rounded-xl animate-pulse" />
-      <div className="grid grid-cols-6 gap-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
-        ))}
-      </div>
-      <div className="h-40 bg-muted rounded-xl animate-pulse" />
+      <div className="col-span-1 xl:col-span-8 h-[280px] bg-muted rounded-md animate-pulse" />
+      <div className="col-span-1 xl:col-span-4 h-[280px] bg-muted rounded-md animate-pulse" />
     </div>
   )
 }

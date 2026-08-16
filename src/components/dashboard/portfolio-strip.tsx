@@ -6,9 +6,11 @@ import { cn } from "@/lib/utils"
 
 type PortfolioStripProps = {
   summary: PortfolioSummary
+  /** Stack metrics vertically — used in the narrow 3xl sidebar slot. */
+  compact?: boolean
 }
 
-export function PortfolioStrip({ summary }: PortfolioStripProps) {
+export function PortfolioStrip({ summary, compact = false }: PortfolioStripProps) {
   const cells = [
     {
       label: "Cost basis",
@@ -41,28 +43,39 @@ export function PortfolioStrip({ summary }: PortfolioStripProps) {
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+      <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
         Portfolio
       </h2>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div
+        className={cn(
+          "grid gap-2",
+          compact ? "grid-cols-1" : "grid-cols-2 lg:grid-cols-4 gap-3"
+        )}
+      >
         {cells.map((c) => (
           <div
             key={c.label}
-            className="rounded-lg border border-border bg-card px-4 py-3 space-y-1"
+            className={cn(
+              "rounded-md border border-border bg-card space-y-0.5",
+              compact ? "px-2.5 py-2" : "px-4 py-3 space-y-1"
+            )}
           >
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {c.label}
             </p>
             <p
               className={cn(
-                "text-lg font-bold tabular-nums",
+                "font-bold tabular-nums",
+                compact ? "text-sm" : "text-lg",
                 c.tone === "pos" && "text-emerald-500",
                 c.tone === "neg" && "text-red-500"
               )}
             >
               {c.value}
             </p>
-            <p className="text-xs text-muted-foreground">{c.sub}</p>
+            <p className={cn("text-muted-foreground", compact ? "text-[10px]" : "text-xs")}>
+              {c.sub}
+            </p>
           </div>
         ))}
       </div>

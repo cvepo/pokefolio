@@ -12,14 +12,17 @@ import { cn } from "@/lib/utils"
 
 type WhatChangedProps = {
   insights: InsightsPayload
+  /** Display-only cap (PRD §19) — never filters stored events. */
+  displayCap?: number
 }
 
-export function WhatChanged({ insights }: WhatChangedProps) {
+export function WhatChanged({ insights, displayCap = INSIGHT_DISPLAY_CAP }: WhatChangedProps) {
   const [expanded, setExpanded] = useState(false)
   const markedRef = useRef<Set<string>>(new Set())
 
   const { visible, shown, total, capped } = insightsForDisplay(insights.events, {
     expanded,
+    cap: displayCap,
     totalCount: insights.totalCount,
   })
 
@@ -55,7 +58,7 @@ export function WhatChanged({ insights }: WhatChangedProps) {
               {insights.unseenCount} unseen
             </span>
           )}
-          {(capped || expanded) && total > INSIGHT_DISPLAY_CAP && (
+          {(capped || expanded) && total > displayCap && (
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}

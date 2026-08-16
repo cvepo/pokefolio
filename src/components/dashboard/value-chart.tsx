@@ -20,6 +20,8 @@ import { estimatedValuationSpans, valuationBasisLabel } from "@/lib/dashboard/va
 type ValueChartProps = {
   series: PerformancePoint[]
   seriesTimeframe: Timeframe
+  /** Concrete pixel height for ResponsiveContainer — never % / h-full. */
+  height?: number
 }
 
 /**
@@ -27,7 +29,7 @@ type ValueChartProps = {
  * Fixed pixel height + numeric ResponsiveContainer height avoids the
  * Compare-chart scrollbar resize loop.
  */
-export function ValueChart({ series, seriesTimeframe }: ValueChartProps) {
+export function ValueChart({ series, seriesTimeframe, height = 280 }: ValueChartProps) {
   const rows = series.map((p) => ({
     date: p.date,
     actual: p.actual == null ? null : centsToDollars(p.actual),
@@ -83,14 +85,17 @@ export function ValueChart({ series, seriesTimeframe }: ValueChartProps) {
       </div>
 
       {rows.length < 2 ? (
-        <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+        <div
+          className="flex items-center justify-center text-sm text-muted-foreground"
+          style={{ height }}
+        >
           Not enough history for this window
         </div>
       ) : (
         /* Fixed height + numeric ResponsiveContainer height avoids scrollbar resize loops */
         <div className="w-full overflow-x-auto">
-          <div className="min-w-[560px] h-[280px]">
-            <ResponsiveContainer width="100%" height={280}>
+          <div className="min-w-[560px]" style={{ height }}>
+            <ResponsiveContainer width="100%" height={height}>
               <LineChart data={rows} margin={{ top: 8, right: 16, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis

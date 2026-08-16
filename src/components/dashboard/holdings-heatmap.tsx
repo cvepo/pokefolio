@@ -8,28 +8,31 @@ import {
   heatmapSizeWeight,
   heatmapTileState,
 } from "@/lib/dashboard/heatmap"
+import type { DensityTier } from "@/components/dashboard/density"
 import { cn } from "@/lib/utils"
 
 type HoldingsHeatmapProps = {
   positions: PositionsPayload
+  /** Wider tiers reflow into more columns instead of growing tiles. */
+  tier?: DensityTier
 }
 
 /**
  * Size = market value, colour = 1M per-unit Value Change clamped ±25% (PRD §15).
  * Stale / unknown / no-history are visually distinct — never colour-alone.
  */
-export function HoldingsHeatmap({ positions }: HoldingsHeatmapProps) {
+export function HoldingsHeatmap({ positions, tier = "base" }: HoldingsHeatmapProps) {
   const { min, max } = positions.heatmapColorDomain
   const sorted = [...positions.positions].sort((a, b) => b.marketValue - a.marketValue)
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Holdings heatmap
           </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             Size by value · colour by 1M Value Change (per unit) · clamped ±25%
           </p>
         </div>
@@ -37,13 +40,19 @@ export function HoldingsHeatmap({ positions }: HoldingsHeatmapProps) {
       </div>
 
       {sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center border border-dashed border-border rounded-xl">
+        <p className="text-sm text-muted-foreground py-8 text-center border border-dashed border-border rounded-md">
           No open positions.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {sorted.map((p) => (
-            <HeatmapTile key={p.productId} position={p} domainMin={min} domainMax={max} />
+            <HeatmapTile
+              key={p.productId}
+              position={p}
+              domainMin={min}
+              domainMax={max}
+              tier={tier}
+            />
           ))}
         </div>
       )}
@@ -51,14 +60,23 @@ export function HoldingsHeatmap({ positions }: HoldingsHeatmapProps) {
   )
 }
 
+function tileFlexBasis(weight: number, tier: DensityTier): number {
+  // Cap tile width lower on wide monitors so the flex wrap gains columns.
+  const maxBasis = tier === "4xl" ? 160 : tier === "3xl" ? 200 : 280
+  const minBasis = tier === "4xl" ? 72 : tier === "3xl" ? 76 : 80
+  return Math.min(maxBasis, minBasis + weight / (tier === "4xl" ? 70 : 40))
+}
+
 function HeatmapTile({
   position,
   domainMin,
   domainMax,
+  tier,
 }: {
   position: Position
   domainMin: number
   domainMax: number
+  tier: DensityTier
 }) {
   const change1M = position.valueChangePct["1M"]
   const state = heatmapTileState(change1M, position.priceStatus)
@@ -84,11 +102,11 @@ function HeatmapTile({
       title={title}
       style={{
         flexGrow: weight,
-        flexBasis: `${Math.min(280, 80 + weight / 40)}px`,
+        flexBasis: `${tileFlexBasis(weight, tier)}px`,
         background: isUnknown ? undefined : fill,
       }}
       className={cn(
-        "relative min-h-[72px] min-w-[120px] max-w-full rounded-lg border px-2.5 py-2 flex flex-col justify-between",
+        "relative min-h-[64px] min-w-[100px] max-w-full rounded-md border px-2 py-1.5 flex flex-col justify-between",
         isUnknown
           ? "border-border bg-[repeating-linear-gradient(-45deg,hsl(var(--muted)),hsl(var(--muted))_6px,hsl(var(--card))_6px,hsl(var(--card))_12px)]"
           : "border-border/80",
