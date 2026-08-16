@@ -147,6 +147,32 @@ export function computeHoldings(transactions: Transaction[]): Holdings {
   return replayHoldings(transactions).holdings
 }
 
+/**
+ * Carry a completed FIFO replay across an ordered date range without replaying
+ * transaction history for every date.
+ */
+export function netQuantityByDate(
+  transactions: HoldingsTransactionResult[],
+  dates: string[]
+): Map<string, number> {
+  const quantities = new Map<string, number>()
+  let transactionIndex = 0
+  let netQty = 0
+
+  for (const date of dates) {
+    while (
+      transactionIndex < transactions.length &&
+      transactions[transactionIndex].transactionDate <= date
+    ) {
+      netQty = transactions[transactionIndex].netQty
+      transactionIndex += 1
+    }
+    quantities.set(date, netQty)
+  }
+
+  return quantities
+}
+
 /** Holdings as of a specific date (inclusive). Used for snapshot rebuild. */
 export function computeHoldingsAsOf(transactions: Transaction[], date: string): Holdings {
   return computeHoldings(transactions.filter((t) => t.transaction_date <= date))

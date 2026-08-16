@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import type { Transaction } from "@/lib/supabase"
-import { computeHoldings, replayHoldings } from "./holdings"
+import {
+  computeHoldings,
+  computeHoldingsAsOf,
+  netQuantityByDate,
+  replayHoldings,
+} from "./holdings"
 
 function transaction(
   id: string,
@@ -74,5 +79,23 @@ describe("replayHoldings", () => {
         realizedPnl: -15,
       },
     ])
+  })
+
+  it("carries net quantity across dates with one transaction replay", () => {
+    const dates = [
+      "2025-12-31",
+      "2026-01-01",
+      "2026-01-02",
+      "2026-01-03",
+      "2026-01-04",
+      "2026-01-05",
+    ]
+    const replay = replayHoldings([...transactions].reverse())
+    const quantities = netQuantityByDate(replay.transactions, dates)
+
+    expect([...quantities.values()]).toEqual([0, 10, 15, 3, 0, 0])
+    for (const date of dates) {
+      expect(quantities.get(date)).toBe(computeHoldingsAsOf(transactions, date).netQty)
+    }
   })
 })

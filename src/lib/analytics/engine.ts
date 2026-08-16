@@ -14,7 +14,11 @@ import type {
   Timeframe,
   ValueChange,
 } from "@/lib/dashboard/contract"
-import { computeHoldings, computeHoldingsAsOf, replayHoldings } from "@/lib/holdings"
+import {
+  computeHoldings,
+  netQuantityByDate,
+  replayHoldings,
+} from "@/lib/holdings"
 import {
   buildPriceIndex,
   daterange,
@@ -320,16 +324,22 @@ export async function publishAnalyticsSnapshot(
       totalValue: summary.totalValue,
     }
 
-    const actualByDate = new Map<string, number>()
     const earliest = txs.map((tx) => tx.transaction_date).sort()[0] ?? today
-    for (const date of daterange(earliest, today)) {
-      let total = 0
-      for (const [productId, rows] of groups) {
-        const holding = computeHoldingsAsOf(rows, date)
+    const actualDates = daterange(earliest, today)
+    const actualByDate = new Map(actualDates.map((date) => [date, 0]))
+
+    // Each product's FIFO history has already been walked once. Carry its net
+    // quantity forward through the calendar instead of re-sorting and replaying
+    // every transaction again for every date on this write path.
+    for (const [productId, replay] of replayByProduct) {
+      const quantities = netQuantityByDate(replay.transactions, actualDates)
+      for (const date of actualDates) {
+        const quantity = quantities.get(date) ?? 0
         const price = priceOnOrBefore(priceIndex, productId, date)
-        if (holding.netQty > 0 && price != null) total += holding.netQty * price
+        if (quantity > 0 && price != null) {
+          actualByDate.set(date, (actualByDate.get(date) ?? 0) + quantity * price)
+        }
       }
-      actualByDate.set(date, total)
     }
 
     const projectedRows = await computeProjectedSnapshots(
