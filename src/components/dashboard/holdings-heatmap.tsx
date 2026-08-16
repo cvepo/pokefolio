@@ -10,6 +10,7 @@ import {
 } from "@/lib/dashboard/heatmap"
 import type { DensityTier } from "@/components/dashboard/density"
 import { heatmapTileFlexBasis } from "@/components/dashboard/density"
+import { DashboardPanel } from "@/components/dashboard/panel"
 import { cn } from "@/lib/utils"
 
 type HoldingsHeatmapProps = {
@@ -27,25 +28,17 @@ export function HoldingsHeatmap({ positions, tier = "base" }: HoldingsHeatmapPro
   const sorted = [...positions.positions].sort((a, b) => b.marketValue - a.marketValue)
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Holdings heatmap
-          </h2>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Size by value · colour by 1M Value Change (per unit) · clamped ±25%
-          </p>
-        </div>
-        <HeatmapLegend />
-      </div>
-
+    <DashboardPanel
+      title="Holdings heatmap"
+      actions={<HeatmapLegend />}
+      bodyClassName="!p-1.5"
+    >
       {sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center border border-dashed border-border rounded-md">
+        <p className="text-xs text-muted-foreground py-4 text-center border border-dashed border-border rounded-sm">
           No open positions.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {sorted.map((p) => (
             <HeatmapTile
               key={p.productId}
@@ -57,7 +50,7 @@ export function HoldingsHeatmap({ positions, tier = "base" }: HoldingsHeatmapPro
           ))}
         </div>
       )}
-    </section>
+    </DashboardPanel>
   )
 }
 
@@ -100,7 +93,7 @@ function HeatmapTile({
         background: isUnknown ? undefined : fill,
       }}
       className={cn(
-        "relative min-h-[64px] min-w-[100px] max-w-full rounded-md border px-2 py-1.5 flex flex-col justify-between",
+        "relative min-h-[48px] min-w-[80px] max-w-full rounded-sm border px-1.5 py-1 flex flex-col justify-between",
         isUnknown
           ? "border-border bg-[repeating-linear-gradient(-45deg,hsl(var(--muted)),hsl(var(--muted))_6px,hsl(var(--card))_6px,hsl(var(--card))_12px)]"
           : "border-border/80",
@@ -108,32 +101,32 @@ function HeatmapTile({
       )}
     >
       <div className="flex items-start justify-between gap-1">
-        <p className="text-[11px] font-medium leading-snug line-clamp-2">{position.name}</p>
+        <p className="text-[10px] font-medium leading-snug line-clamp-2">{position.name}</p>
         {state === "stale" && (
-          <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-500/15 px-1 py-0.5 rounded">
+          <span className="shrink-0 text-[8px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-500/15 px-1 py-0.5 rounded-sm">
             Stale
           </span>
         )}
         {position.priceStatus === "unknown" && (
-          <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-muted-foreground bg-muted px-1 py-0.5 rounded">
+          <span className="shrink-0 text-[8px] font-bold uppercase tracking-wide text-muted-foreground bg-muted px-1 py-0.5 rounded-sm">
             No price
           </span>
         )}
       </div>
-      <div className="flex items-end justify-between gap-2 mt-1">
-        <span className="text-xs font-semibold tabular-nums">
+      <div className="flex items-end justify-between gap-1 mt-0.5">
+        <span className="text-[11px] font-semibold tabular-nums">
           {position.priceStatus === "unknown" ? "—" : formatCents(position.marketValue)}
         </span>
         <span
           className={cn(
-            "text-[11px] font-semibold tabular-nums",
+            "text-[10px] font-semibold tabular-nums",
             change1M == null && "text-muted-foreground",
             change1M != null && change1M >= 0 && "text-emerald-600 dark:text-emerald-400",
             change1M != null && change1M < 0 && "text-red-600 dark:text-red-400"
           )}
         >
           {change1M == null ? (
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-0.5">
               <span aria-hidden>⌀</span> Unknown
             </span>
           ) : (
@@ -147,25 +140,24 @@ function HeatmapTile({
 
 function HeatmapLegend() {
   return (
-    <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
-      <span className="inline-flex items-center gap-1">
-        <span className="w-3 h-3 rounded-sm bg-emerald-500/50" aria-hidden /> Gain
+    <div className="flex items-center gap-2 text-[9px] text-muted-foreground flex-wrap justify-end">
+      <span className="inline-flex items-center gap-0.5">
+        <span className="w-2 h-2 rounded-sm bg-emerald-500/50" aria-hidden /> Gain
       </span>
-      <span className="inline-flex items-center gap-1">
-        <span className="w-3 h-3 rounded-sm bg-red-500/50" aria-hidden /> Loss
+      <span className="inline-flex items-center gap-0.5">
+        <span className="w-2 h-2 rounded-sm bg-red-500/50" aria-hidden /> Loss
       </span>
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-0.5">
         <span
-          className="w-3 h-3 rounded-sm border border-border bg-[repeating-linear-gradient(-45deg,#8883_0_2px,transparent_2px_4px)]"
+          className="w-2 h-2 rounded-sm border border-border bg-[repeating-linear-gradient(-45deg,#8883_0_2px,transparent_2px_4px)]"
           aria-hidden
         />{" "}
-        Unknown / no history
+        Unknown
       </span>
-      <span className="inline-flex items-center gap-1">
-        <span className="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300 bg-amber-500/15 px-1 rounded">
+      <span className="inline-flex items-center gap-0.5">
+        <span className="text-[8px] font-bold uppercase text-amber-700 dark:text-amber-300 bg-amber-500/15 px-0.5 rounded-sm">
           Stale
-        </span>{" "}
-        label on tile
+        </span>
       </span>
     </div>
   )

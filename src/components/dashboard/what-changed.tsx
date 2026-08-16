@@ -8,6 +8,7 @@ import {
   formatInsightsCounter,
   insightsForDisplay,
 } from "@/lib/dashboard/insights"
+import { DashboardPanel } from "@/components/dashboard/panel"
 import { cn } from "@/lib/utils"
 
 type WhatChangedProps = {
@@ -46,12 +47,10 @@ export function WhatChanged({ insights, displayCap = INSIGHT_DISPLAY_CAP }: What
   }, [visible])
 
   return (
-    <section className="border border-border rounded-md bg-card p-3 3xl:p-4 space-y-2 h-full">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          What Changed
-        </h2>
-        <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground">
+    <DashboardPanel
+      title="What Changed"
+      actions={
+        <>
           <span className="tabular-nums">{formatInsightsCounter(shown, total)}</span>
           {insights.unseenCount > 0 && (
             <span className="text-amber-600 dark:text-amber-400 font-medium tabular-nums">
@@ -64,22 +63,23 @@ export function WhatChanged({ insights, displayCap = INSIGHT_DISPLAY_CAP }: What
               onClick={() => setExpanded((v) => !v)}
               className="underline underline-offset-2 hover:text-foreground"
             >
-              {expanded ? "Show less" : "View all"}
+              {expanded ? "Less" : "All"}
             </button>
           )}
-        </div>
-      </div>
-
+        </>
+      }
+      bodyClassName="!p-1.5"
+    >
       {visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-3">Nothing new — portfolio is quiet.</p>
+        <p className="text-xs text-muted-foreground py-2">Nothing new — portfolio is quiet.</p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-1">
           {visible.map((event) => (
             <InsightRow key={event.id} event={event} />
           ))}
         </ul>
       )}
-    </section>
+    </DashboardPanel>
   )
 }
 
@@ -88,20 +88,20 @@ function InsightRow({ event }: { event: InsightEvent }) {
   return (
     <li
       className={cn(
-        "flex items-start gap-2 rounded-md border border-border/80 px-2.5 py-2",
+        "flex items-start gap-1.5 rounded-sm border border-border/80 px-2 py-1.5 min-h-[22px]",
         event.seenAt == null && "bg-accent/30"
       )}
     >
       <span
-        className={cn("text-sm font-semibold shrink-0 w-4 text-center", meta.toneClass)}
+        className={cn("text-xs font-semibold shrink-0 w-3.5 text-center leading-5", meta.toneClass)}
         title={meta.label}
         aria-label={meta.label}
       >
         {meta.symbol}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium leading-snug">{event.headline}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+        <p className="text-xs font-medium leading-snug">{event.headline}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5 flex flex-wrap gap-x-1.5 gap-y-0">
           <span className={meta.toneClass}>{meta.label}</span>
           <span aria-hidden>·</span>
           <span>{event.setName}</span>
@@ -119,7 +119,7 @@ function InsightRow({ event }: { event: InsightEvent }) {
           )}
         </p>
         {event.detail && (
-          <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">{event.detail}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{event.detail}</p>
         )}
       </div>
     </li>

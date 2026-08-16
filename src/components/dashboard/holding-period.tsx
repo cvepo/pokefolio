@@ -3,12 +3,22 @@
 import type { Position } from "@/lib/dashboard/contract"
 import { formatAgeDays, rollupHoldingPeriod } from "@/lib/dashboard/holding-period"
 import { formatSnapshotDate } from "@/lib/utils"
+import { DashboardPanel } from "@/components/dashboard/panel"
+import { cn } from "@/lib/utils"
 
 type HoldingPeriodSummaryProps = {
   positions: Position[]
+  /** When false, omit the panel chrome (used inside a shared Activity/Holding tab). */
+  bare?: boolean
+  /** Single-row compact strip for tight vertical budgets. */
+  compact?: boolean
 }
 
-export function HoldingPeriodSummary({ positions }: HoldingPeriodSummaryProps) {
+export function HoldingPeriodSummary({
+  positions,
+  bare = false,
+  compact = false,
+}: HoldingPeriodSummaryProps) {
   const rollup = rollupHoldingPeriod(positions)
 
   const cells = [
@@ -35,25 +45,40 @@ export function HoldingPeriodSummary({ positions }: HoldingPeriodSummaryProps) {
     },
   ]
 
+  const body = (
+    <div
+      className={cn(
+        "grid gap-1.5",
+        compact ? "grid-cols-3" : "grid-cols-1 sm:grid-cols-3"
+      )}
+    >
+      {cells.map((c) => (
+        <div
+          key={c.label}
+          className={cn(
+            "rounded-sm border border-border bg-background/40 space-y-0.5",
+            compact ? "px-2 py-1.5" : "px-2.5 py-2"
+          )}
+        >
+          <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+            {c.label}
+          </p>
+          <p className={cn("font-bold tabular-nums", compact ? "text-xs" : "text-sm")}>
+            {c.value}
+          </p>
+          {!compact && (
+            <p className="text-[10px] text-muted-foreground leading-snug">{c.sub}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+
+  if (bare) return body
+
   return (
-    <section className="h-full">
-      <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-        Holding period
-      </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 h-[calc(100%-1.5rem)]">
-        {cells.map((c) => (
-          <div
-            key={c.label}
-            className="rounded-md border border-border bg-card px-3 py-2.5 space-y-0.5"
-          >
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {c.label}
-            </p>
-            <p className="text-base font-bold tabular-nums">{c.value}</p>
-            <p className="text-[11px] text-muted-foreground">{c.sub}</p>
-          </div>
-        ))}
-      </div>
-    </section>
+    <DashboardPanel title="Holding period" bodyClassName="!p-1.5">
+      {body}
+    </DashboardPanel>
   )
 }
