@@ -6,12 +6,44 @@ import { computeProjectedSnapshots } from "@/lib/projected-snapshots"
 import { effectiveCategory } from "./categorize"
 import { computeHoldingPeriod } from "./holding-period"
 import { computeTrackedAth } from "./tracked-ath"
+import { signalTransition } from "./insights/signal-transition"
+import { outsizedMoveState, outsizedMoveTransition, type OutsizedMoveState } from "./insights/outsized-move"
+import { concentrationTransition } from "./insights/concentration"
+import { drawdownTransition } from "./insights/drawdown"
+import { insightSeverity } from "./insights/severity"
 import type { Product, Transaction } from "@/lib/supabase"
-import type { ActivityItem, PortfolioAllocation, PortfolioPerformance, PortfolioSummary, Position, ProductCategory, Timeframe, ValueChange } from "@/lib/dashboard/contract"
+import type { ActivityItem, InsightPayload, PortfolioAllocation, PortfolioPerformance, PortfolioSummary, Position, PositionSignal, ProductCategory, Timeframe, ValueChange } from "@/lib/dashboard/contract"
 import { TIMEFRAMES, TIMEFRAME_DAYS, toCents, toCentsOrNull } from "@/lib/dashboard/contract"
 
 type ProductRow = Product & { category_override?: ProductCategory | null }
 type Source = { syncRunId?: string; transactionId?: string }
+
+async function persistInsightTransitions(snapshotId:string, positions:Position[], at:string):Promise<number>{
+  if(!positions.length)return 0
+  const ids=positions.map(p=>p.productId)
+  const {data:states}=await supabase.from("position_signal_state").select("*").in("product_id",ids)
+  const stateById=new Map((states??[]).map(s=>[s.product_id,s]))
+  const events:Array<Record<string,unknown>>=[]
+  for(const p of positions){
+    const old=stateById.get(p.productId) as {last_signal:PositionSignal|null;last_outsized_move_state:OutsizedMoveState;last_concentration_state:boolean|null;last_drawdown_state:boolean|null}|undefined
+    const signal=signalTransition(old?.last_signal??null,p.signal)
+    const move=outsizedMoveTransition(old?.last_outsized_move_state??"NORMAL",p.valueChangePct["1M"])
+    const concentration=concentrationTransition(old?.last_concentration_state??null,p.portfolioShare)
+    const drawdown=drawdownTransition({wasInDrawdown:old?.last_drawdown_state??null,drawdownPct:p.drawdownFromAthPct,trackedAth:p.trackedAth==null?null:p.trackedAth/100,trackedAthDate:p.trackedAthDate})
+    const add=(type:string,payload:InsightPayload,category:string,headline:string,state="active")=>events.push({
+      type,entity_id:p.productId,state,severity:insightSeverity(payload),triggered_at:at,
+      resolved_at:state==="resolved"?at:null,snapshot_id:snapshotId,dedupe_key:`${snapshotId}:${p.productId}:${type}`,
+      payload:{...payload,category,headline},
+    })
+    if(signal)add("signal_transition",signal,signal.toSignal==="Declining"||signal.toSignal==="Cooling"?"needs_attention":"signal_change",`${signal.fromSignal} → ${signal.toSignal}`)
+    if(move)add("outsized_move",move,move.direction==="down"?"needs_attention":"positive",`${move.direction==="down"?"Down":"Up"} ${(Math.abs(move.movePct)*100).toFixed(1)}% (1M)`,move.toState==="NORMAL"?"resolved":"active")
+    if(concentration){if(concentration.resolved)await supabase.from("insight_events").update({state:"resolved",resolved_at:at}).eq("entity_id",p.productId).eq("type","concentration").eq("state","active");else add("concentration",concentration.payload,"needs_attention",`Concentration: ${(p.portfolioShare*100).toFixed(1)}% of portfolio`)}
+    if(drawdown){if(drawdown.resolved)await supabase.from("insight_events").update({state:"resolved",resolved_at:at}).eq("entity_id",p.productId).eq("type","drawdown").eq("state","active");else add("drawdown",drawdown.payload,"needs_attention",`${(Math.abs(drawdown.payload.drawdownPct)*100).toFixed(1)}% below Tracked ATH`)}
+    await supabase.from("position_signal_state").upsert({product_id:p.productId,last_signal:p.signal,last_outsized_move_state:outsizedMoveState(p.valueChangePct["1M"]),last_concentration_state:p.portfolioShare>=0.2,last_drawdown_state:p.drawdownFromAthPct!=null&&p.drawdownFromAthPct<=-0.15,updated_at:at})
+  }
+  if(events.length){const {error}=await supabase.from("insight_events").insert(events);if(error)throw new Error(error.message)}
+  return events.length
+}
 
 function dateMinus(date: string, days: number): string {
   const value = new Date(`${date}T00:00:00Z`)
@@ -159,9 +191,12 @@ export async function publishAnalyticsSnapshot(opts: {
       realizedPnl:tx.type==="sell"?toCents(computeHoldings(groups.get(tx.product_id)?.filter(t=>t.transaction_date<=tx.transaction_date)??[]).realizedPnL):null,notes:tx.notes,
     })) }
     if (positions.length) await supabase.from("snapshot_positions").insert(positions.map((position)=>({snapshot_id:snapshotId,product_id:position.productId,position})))
+    // Transition state is global per product today, so only the combined scope
+    // advances it; scoped snapshots still carry the resulting event log.
+    const insightsCreated=opts.portfolioId?0:await persistInsightTransitions(snapshotId,positions,asOf.toISOString())
     const { error: publishError } = await supabase.from("analytics_snapshots").update({
       status:"published",completed_at:new Date().toISOString(),products_requested:productIds.length,products_updated:positions.length,
-      products_failed:positions.filter(p=>p.priceStatus!=="ok").length,summary,performance,allocation,activity,
+      products_failed:positions.filter(p=>p.priceStatus!=="ok").length,insights_created:insightsCreated,summary,performance,allocation,activity,
     }).eq("id",snapshotId).eq("status","pending")
     if(publishError) throw new Error(publishError.message)
     return snapshotId
