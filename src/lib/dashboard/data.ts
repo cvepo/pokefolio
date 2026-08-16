@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase-server"
+import { getAppSettings, nextScheduledDescription } from "@/lib/sync-log"
 import type {
   ActivityPayload,
   ApiEnvelope,
@@ -170,11 +171,14 @@ export async function insightsData(portfolioId?: string, snapshot?: Snapshot) {
 
 export async function syncData(portfolioId?: string, snapshot?: Snapshot) {
   const resolved = snapshot ?? (await latestSnapshot(portfolioId))
-  const { data: runs } = await supabase
-    .from("sync_runs")
-    .select("*")
-    .order("started_at", { ascending: false })
-    .limit(50)
+  const [{ data: runs }, settings] = await Promise.all([
+    supabase
+      .from("sync_runs")
+      .select("*")
+      .order("started_at", { ascending: false })
+      .limit(50),
+    getAppSettings(),
+  ])
   const latest = runs?.[0] ?? null
   const success =
     runs?.find((run) => run.status === "success" || run.status === "partial") ?? null
@@ -207,7 +211,7 @@ export async function syncData(portfolioId?: string, snapshot?: Snapshot) {
       })
     ),
     stalePositionCount: resolved.summary.stalePositionCount,
-    nextScheduledDescription: null,
+    nextScheduledDescription: nextScheduledDescription(settings),
   }
   return envelope(resolved, payload)
 }

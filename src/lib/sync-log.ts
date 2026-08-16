@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase-server"
 import type { AppSettings, SyncRun, SyncStatus, SyncTrigger } from "@/lib/supabase"
+import { describeSyncTime, SYNC_CRON_UTC_HOUR } from "@/lib/utils"
 
 const DEFAULT_SETTINGS: Omit<AppSettings, "updated_at"> = {
   id: 1,
@@ -59,6 +60,30 @@ export function expectedSyncWindowDays(settings: AppSettings): number {
     longestGap = Math.max(longestGap, gap)
   }
   return longestGap
+}
+
+export function nextScheduledDescription(
+  settings: AppSettings,
+  at: Date = new Date()
+): string | null {
+  if (!settings.sync_days?.length) return null
+
+  // Search actual upcoming cron instants rather than adding calendar days in
+  // the server timezone. isScheduledToday then applies the user's timezone in
+  // exactly the same way as the cron route itself.
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const candidate = new Date(at)
+    candidate.setUTCHours(SYNC_CRON_UTC_HOUR, 0, 0, 0)
+    candidate.setUTCDate(candidate.getUTCDate() + offset)
+    if (candidate < at || !isScheduledToday(settings, candidate)) continue
+
+    // Reuse the settings-page sentence and its schedule label so the dashboard
+    // and settings descriptions cannot drift into different terminology.
+    const { scheduleLabel } = describeSyncTime(settings.sync_timezone, candidate)
+    return `A scheduled run fires at ${scheduleLabel} there.`
+  }
+
+  return null
 }
 
 /** Insert a run row at the start of a sync. Returns the row id, or null if logging is unavailable. */
