@@ -15,20 +15,22 @@ import { AllocationPanel } from "@/components/dashboard/allocation-panel"
 import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { HoldingsHeatmap } from "@/components/dashboard/holdings-heatmap"
 import { HoldingPeriodSummary } from "@/components/dashboard/holding-period"
+import { ActivityHoldingTabs } from "@/components/dashboard/activity-holding-tabs"
 import { useDashboardDensity } from "@/components/dashboard/use-density"
+import { useDashboardViewportLock } from "@/components/dashboard/viewport-lock"
 import { cn } from "@/lib/utils"
 
 /**
  * Dashboard 2.0 parallel route (decisions.md A6).
  * Reading order follows PRD §10: value → Value Change → What Changed → rest.
- * Grid spans claim horizontal space on 15"/23"/27" while keeping that priority
- * top-left and largest at every tier.
+ * Viewport-locked terminal shell: one dvh, panes scroll internally.
  */
 export default function DashboardV2Page() {
   const [portfolioId, setPortfolioId] = useState<string | undefined>(undefined)
   const [timeframe, setTimeframe] = useState<Timeframe>("1M")
   const [useFixture, setUseFixture] = useState(false)
   const density = useDashboardDensity()
+  useDashboardViewportLock()
 
   const { data, loading, error, errorHint, refresh } = useDashboard({ portfolioId, timeframe })
 
@@ -62,20 +64,15 @@ export default function DashboardV2Page() {
   }, [payload, timeframe])
 
   return (
-    <div className="w-full max-w-dashboard mx-auto p-4 xl:p-5 3xl:p-6 space-y-4 xl:space-y-3 3xl:space-y-2.5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-lg xl:text-xl font-bold flex items-center gap-2">
-            <LayoutDashboard size={18} />
-            Dashboard
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5">
-              v2
-            </span>
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Portfolio check-in — Value Change, not return
-          </p>
-        </div>
+    <div className="dashboard-v2 flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden px-3 py-2 gap-2 w-full max-xl:overflow-y-auto max-xl:h-auto max-xl:max-h-none">
+      <div className="shrink-0 flex items-center justify-between gap-3 min-w-0">
+        <h1 className="text-sm font-bold flex items-center gap-1.5 min-w-0">
+          <LayoutDashboard size={14} className="shrink-0" />
+          <span className="truncate">Dashboard</span>
+          <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground border border-border rounded-sm px-1 py-px">
+            v2
+          </span>
+        </h1>
         <PortfolioSwitcher
           value={portfolioId ?? "all"}
           onChange={(id) => setPortfolioId(id === "all" ? undefined : id)}
@@ -83,50 +80,50 @@ export default function DashboardV2Page() {
       </div>
 
       {useFixture && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <div>
-            <p className="font-medium">
-              Every number below is fake — this is fixture data, not your portfolio
-            </p>
-            <p className="text-xs opacity-90">
-              Rendered because <code>?fixtures=1</code> is set, so the stale, unknown and
-              missing-history states stay reviewable without a database. Remove it from the URL
-              to see real data.
-            </p>
-          </div>
+        <div className="shrink-0 flex items-start gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          <p>
+            <span className="font-medium">Fixture data</span>
+            {" — "}
+            every number below is fake (<code>?fixtures=1</code>).
+          </p>
         </div>
       )}
 
       {loading && !payload ? (
         <DashboardSkeleton />
       ) : error && !payload ? (
-        <div className="rounded-lg border border-dashed border-border p-10 text-center space-y-3">
-          <AlertCircle className="mx-auto text-muted-foreground" size={28} />
-          <p className="font-medium">Couldn’t load the dashboard</p>
-          <p className="text-sm text-muted-foreground">{error}</p>
-          {errorHint && (
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              <span className="font-medium text-foreground">Next step: </span>
-              {errorHint}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={() => refresh()}
-            className="text-sm underline underline-offset-2 text-muted-foreground hover:text-foreground"
-          >
-            Retry
-          </button>
+        <div className="flex-1 min-h-0 flex items-center justify-center">
+          <div className="rounded-sm border border-dashed border-border p-8 text-center space-y-2 max-w-md">
+            <AlertCircle className="mx-auto text-muted-foreground" size={24} />
+            <p className="font-medium text-sm">Couldn’t load the dashboard</p>
+            <p className="text-xs text-muted-foreground">{error}</p>
+            {errorHint && (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Next step: </span>
+                {errorHint}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => refresh()}
+              className="text-xs underline underline-offset-2 text-muted-foreground hover:text-foreground"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       ) : payload && envelope ? (
         <div
           className={cn(
-            "dashboard-v2-grid grid grid-cols-1 xl:grid-cols-12 tabular-nums",
-            "gap-4 xl:gap-3 3xl:gap-2.5 4xl:gap-2"
+            "dashboard-v2-grid flex-1 min-h-0 min-w-0 grid tabular-nums gap-2",
+            "grid-cols-1 xl:grid-cols-12",
+            /* Locked fractional rows from xl up (15"+); stack below */
+            "xl:grid-rows-[auto_minmax(0,1.25fr)_minmax(0,1fr)]"
           )}
         >
-          <div className="col-span-1 xl:col-span-12 order-1 space-y-3 xl:space-y-0">
+          {/* Row 1 — value → Value Change → portfolio ticker (PRD §10) */}
+          <div className="col-span-1 xl:col-span-12 xl:row-start-1 min-w-0 space-y-1.5">
             <ValueHeader
               summary={payload.summary}
               primaryChange={primaryChange}
@@ -141,9 +138,16 @@ export default function DashboardV2Page() {
               active={timeframe}
               onSelect={setTimeframe}
             />
+            <PortfolioStrip summary={payload.summary} ticker />
           </div>
 
-          <div className="col-span-1 xl:col-span-8 3xl:col-span-7 4xl:col-span-6 order-2 min-w-0">
+          {/* Row 2 — chart + What Changed (never demoted) */}
+          <div
+            className={cn(
+              "min-h-0 min-w-0 max-xl:min-h-[220px]",
+              "col-span-1 xl:col-span-8 xl:row-start-2 3xl:col-span-7 4xl:col-span-6"
+            )}
+          >
             <ValueChart
               series={payload.performance.series}
               seriesTimeframe={timeframe}
@@ -151,37 +155,67 @@ export default function DashboardV2Page() {
             />
           </div>
 
-          <div className="col-span-1 xl:col-span-4 3xl:col-span-3 4xl:col-span-3 order-3 min-w-0">
+          <div
+            className={cn(
+              "min-h-0 min-w-0 max-xl:min-h-[200px]",
+              "col-span-1 xl:col-span-4 xl:row-start-2 3xl:col-span-5 4xl:col-span-3"
+            )}
+          >
             <WhatChanged insights={payload.insights} displayCap={density.insightCap} />
           </div>
 
-          {/*
-            Portfolio strip: full width on laptop; narrow sidebar on 23";
-            half-width bottom row on 27". order jumps at 4xl so Allocation
-            can sit beside the chart instead.
-          */}
-          <div className="col-span-1 xl:col-span-12 3xl:col-span-2 4xl:col-span-6 order-4 4xl:order-7 min-w-0">
-            <PortfolioStrip
-              summary={payload.summary}
-              compact={density.tier === "3xl"}
-            />
+          {/* 4xl: Allocation climbs beside What Changed instead of stretching Activity */}
+          {density.tier === "4xl" ? (
+            <div className="min-h-0 min-w-0 4xl:row-start-2 4xl:col-span-3">
+              <AllocationPanel allocation={payload.allocation} />
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "min-h-0 min-w-0 max-xl:min-h-[180px]",
+                "col-span-1 xl:col-span-3 xl:row-start-3 3xl:col-span-3"
+              )}
+            >
+              <AllocationPanel allocation={payload.allocation} />
+            </div>
+          )}
+
+          <div
+            className={cn(
+              "min-h-0 min-w-0 max-xl:min-h-[180px]",
+              "xl:row-start-3",
+              density.holdingPeriodSeparate
+                ? "col-span-1 xl:col-span-3 3xl:col-span-3 4xl:col-span-3"
+                : "col-span-1 xl:col-span-4 3xl:col-span-3"
+            )}
+          >
+            {density.holdingPeriodSeparate ? (
+              <RecentActivity activity={payload.activity} />
+            ) : (
+              <ActivityHoldingTabs
+                activity={payload.activity}
+                positions={payload.positions.positions}
+              />
+            )}
           </div>
 
-          <div className="col-span-1 xl:col-span-6 3xl:col-span-4 4xl:col-span-3 order-5 4xl:order-4 min-w-0">
-            <AllocationPanel allocation={payload.allocation} />
-          </div>
-
-          <div className="col-span-1 xl:col-span-6 3xl:col-span-4 4xl:col-span-4 order-6 min-w-0">
-            <RecentActivity activity={payload.activity} />
-          </div>
-
-          <div className="col-span-1 xl:col-span-12 4xl:col-span-8 order-7 3xl:order-8 4xl:order-5 min-w-0">
+          <div
+            className={cn(
+              "min-h-0 min-w-0 max-xl:min-h-[200px]",
+              "xl:row-start-3",
+              density.holdingPeriodSeparate
+                ? "col-span-1 xl:col-span-6 3xl:col-span-4 4xl:col-span-6"
+                : "col-span-1 xl:col-span-5 3xl:col-span-6"
+            )}
+          >
             <HoldingsHeatmap positions={payload.positions} tier={density.tier} />
           </div>
 
-          <div className="col-span-1 xl:col-span-12 3xl:col-span-4 4xl:col-span-6 order-8 3xl:order-7 4xl:order-8 min-w-0">
-            <HoldingPeriodSummary positions={payload.positions.positions} />
-          </div>
+          {density.holdingPeriodSeparate && (
+            <div className="min-h-0 min-w-0 col-span-1 3xl:col-span-2 3xl:row-start-3 4xl:col-span-3">
+              <HoldingPeriodSummary positions={payload.positions.positions} />
+            </div>
+          )}
         </div>
       ) : null}
     </div>
@@ -190,13 +224,13 @@ export default function DashboardV2Page() {
 
 function DashboardSkeleton() {
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
-      <div className="col-span-1 xl:col-span-12 space-y-2">
-        <div className="h-9 w-56 bg-muted rounded animate-pulse" />
-        <div className="h-14 bg-muted rounded-md animate-pulse" />
+    <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-12 grid-rows-[auto_minmax(0,1.25fr)_minmax(0,1fr)] gap-2">
+      <div className="col-span-1 xl:col-span-12 space-y-1.5">
+        <div className="h-8 w-48 bg-muted rounded-sm animate-pulse" />
+        <div className="h-10 bg-muted rounded-sm animate-pulse" />
       </div>
-      <div className="col-span-1 xl:col-span-8 h-[280px] bg-muted rounded-md animate-pulse" />
-      <div className="col-span-1 xl:col-span-4 h-[280px] bg-muted rounded-md animate-pulse" />
+      <div className="col-span-1 xl:col-span-8 min-h-0 bg-muted rounded-sm animate-pulse" />
+      <div className="col-span-1 xl:col-span-4 min-h-0 bg-muted rounded-sm animate-pulse" />
     </div>
   )
 }
