@@ -52,7 +52,7 @@ export function ComparisonChart({
 }: ComparisonChartProps) {
   if (emptyMessage) {
     return (
-      <div className="h-72 flex items-center justify-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+      <div className="h-full min-h-[360px] flex items-center justify-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
         {emptyMessage}
       </div>
     )
@@ -60,7 +60,7 @@ export function ComparisonChart({
 
   if (!rows.length || (view !== "combined_pct" && products.length === 0)) {
     return (
-      <div className="h-72 flex items-center justify-center text-sm text-muted-foreground">
+      <div className="h-full min-h-[360px] flex items-center justify-center text-sm text-muted-foreground">
         Select products to compare
       </div>
     )
@@ -70,15 +70,15 @@ export function ComparisonChart({
   const tickInterval = rows.length > 90 ? Math.ceil(rows.length / 8) : rows.length > 30 ? 6 : 0
 
   return (
-    <div className="space-y-2">
+    <div className="h-full min-h-[360px] flex flex-col gap-2">
       {isCombined && basketAnchorDate && basketAnchorDate > windowStart && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground shrink-0">
           Basket starts {formatSnapshotDate(basketAnchorDate)} — the earliest date all{" "}
           {products.length} selected products have prices.
         </p>
       )}
-      <div className="w-full overflow-x-auto">
-        <div className="min-w-[640px] h-72">
+      <div className="w-full flex-1 min-h-[360px] overflow-x-auto">
+        <div className="min-w-[640px] h-full min-h-[360px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />

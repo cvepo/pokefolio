@@ -306,8 +306,8 @@ export default function ComparePage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4 items-stretch">
-        <aside className="hidden lg:block border border-border rounded-xl bg-card overflow-hidden max-h-[560px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4 items-stretch lg:min-h-[min(70vh,640px)]">
+        <aside className="hidden lg:block border border-border rounded-xl bg-card overflow-hidden lg:max-h-[min(70vh,640px)]">
           <ProductSelector
             rows={selectorRows}
             selectedIds={selectedIds}
@@ -323,8 +323,8 @@ export default function ComparePage() {
           />
         </aside>
 
-        <section className="border border-border rounded-xl bg-card p-4 md:p-5 space-y-3 min-w-0">
-          <div className="flex flex-col gap-3">
+        <section className="border border-border rounded-xl bg-card p-4 md:p-5 flex flex-col gap-3 min-w-0 lg:min-h-[min(70vh,640px)]">
+          <div className="flex flex-col gap-3 shrink-0">
             <div className="flex flex-wrap gap-1">
               {(["7D", "1M", "3M", "6M", "MAX"] as Timeframe[]).map((tf) => (
                 <button
@@ -361,26 +361,28 @@ export default function ComparePage() {
           </div>
 
           {notEnoughHistory ? (
-            <div className="h-72 flex flex-col items-center justify-center text-sm text-muted-foreground gap-2 text-center px-4">
+            <div className="flex-1 min-h-[360px] flex flex-col items-center justify-center text-sm text-muted-foreground gap-2 text-center px-4">
               <p>Not enough price history in this range — try a longer timeframe</p>
               <Link href="/settings" className="underline underline-offset-2 text-xs">
                 Run a sync in Settings
               </Link>
             </div>
           ) : (
-            <ComparisonChart
-              rows={series.rows}
-              products={chartProducts}
-              view={view}
-              colors={colorMap}
-              hoveredId={isolationDisabled ? null : hoveredId}
-              anchors={series.anchors}
-              basketAnchorDate={series.basketAnchorDate}
-              windowStart={windowStart}
-              emptyMessage={
-                selectedIds.size === 0 ? "Select products to compare" : undefined
-              }
-            />
+            <div className="flex-1 min-h-[360px]">
+              <ComparisonChart
+                rows={series.rows}
+                products={chartProducts}
+                view={view}
+                colors={colorMap}
+                hoveredId={isolationDisabled ? null : hoveredId}
+                anchors={series.anchors}
+                basketAnchorDate={series.basketAnchorDate}
+                windowStart={windowStart}
+                emptyMessage={
+                  selectedIds.size === 0 ? "Select products to compare" : undefined
+                }
+              />
+            </div>
           )}
         </section>
       </div>
