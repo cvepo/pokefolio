@@ -27,8 +27,16 @@ export default function DashboardV2Page() {
 
   const { data, loading, error, refresh } = useDashboard({ portfolioId, timeframe })
 
-  // Fall back to fixtures when the BFF is absent so every section is reviewable.
+  // Fall back to fixtures when the BFF is absent so every section stays reviewable
+  // while the backend branch is still unmerged.
+  //
+  // Development only, deliberately. In production a failed request must surface as
+  // the honest error state below — rendering a plausible-looking total value from
+  // fabricated data is precisely the misrepresentation PRD §12 exists to prevent,
+  // and an amber banner is not enough to stop someone reading the headline number
+  // at a glance and believing it.
   useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return
     if (error && !data) setUseFixture(true)
     if (data) setUseFixture(false)
   }, [error, data])
