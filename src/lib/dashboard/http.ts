@@ -30,7 +30,7 @@ export async function response<T>(work: () => Promise<T>) {
         {
           error: error.message,
           code: "schema_missing",
-          hint: "Run supabase/migrations/005-008 in the Supabase SQL editor, then sync.",
+          hint: "Paste docs/dashboard-2.0/apply-migrations.sql into the Supabase SQL editor and run it, then sync.",
         },
         { status: 503 }
       )
