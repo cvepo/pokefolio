@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase-server"
 import { rebuildPortfolioSnapshots } from "@/lib/rebuild-portfolio-snapshots"
-import { publishAnalyticsSnapshot } from "@/lib/analytics/engine"
+import { refreshAnalyticsAfterMutation } from "@/lib/analytics/refresh"
 
 /**
  * Delete ALL transactions for a given product in a given portfolio.
@@ -23,7 +23,6 @@ export async function DELETE(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await rebuildPortfolioSnapshots([id])
-  await publishAnalyticsSnapshot()
-  await publishAnalyticsSnapshot({ portfolioId: id })
+  await refreshAnalyticsAfterMutation(id)
   return NextResponse.json({ ok: true })
 }

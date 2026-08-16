@@ -12,6 +12,31 @@ import {
 import type { SyncTrigger } from "@/lib/supabase"
 import { publishAnalyticsSnapshot } from "@/lib/analytics/engine"
 
+/**
+ * Recompute the dashboard's analytics snapshots for every scope.
+ *
+ * Returns null on success, or the error message if publishing failed. Never
+ * throws: see the call site for why analytics must not be able to fail a sync
+ * that already spent its pricing budget successfully.
+ */
+async function publishAnalyticsSnapshots(runId: string | null): Promise<string | null> {
+  try {
+    await publishAnalyticsSnapshot({ source: { syncRunId: runId ?? undefined } })
+    const { data: portfolioRows } = await supabase.from("portfolios").select("id")
+    for (const portfolio of portfolioRows ?? []) {
+      await publishAnalyticsSnapshot({
+        portfolioId: portfolio.id,
+        source: { syncRunId: runId ?? undefined },
+      })
+    }
+    return null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("[sync] analytics publish failed; prices were still synced:", message)
+    return message
+  }
+}
+
 // Vercel Hobby's default function timeout is 10s, which isn't enough once we
 // have ~20 products. Cap at 60s (the Hobby maximum).
 export const maxDuration = 60
@@ -271,16 +296,18 @@ async function syncPrices(trigger: SyncTrigger) {
       failures,
     })
 
-    // Analytics is derived exclusively from the data persisted above. Publish
-    // combined and per-portfolio scopes only after the sync log is complete.
-    await publishAnalyticsSnapshot({ source: { syncRunId: runId ?? undefined } })
-    const { data: portfolioRows } = await supabase.from("portfolios").select("id")
-    for (const portfolio of portfolioRows ?? []) {
-      await publishAnalyticsSnapshot({
-        portfolioId: portfolio.id,
-        source: { syncRunId: runId ?? undefined },
-      })
-    }
+    // Analytics is derived exclusively from the data persisted above, so it runs
+    // after the sync log is complete — and it is deliberately not allowed to fail
+    // the sync.
+    //
+    // Pricing is the expensive, rate-limited part of this route: it costs real
+    // requests against a 100/day budget and cannot simply be retried. Analytics
+    // is pure recomputation over data already committed, and the next sync or
+    // transaction mutation will rebuild it for free. Letting a recompute error
+    // mark a fully successful 20/20 price run as "failed" would report a data
+    // outage that did not happen, which is exactly the misrepresentation PRD §21
+    // (failure isolation) and §12 exist to prevent.
+    const analyticsError = await publishAnalyticsSnapshots(runId)
 
     return NextResponse.json({
       ok: true,
@@ -293,6 +320,10 @@ async function syncPrices(trigger: SyncTrigger) {
       date: today,
       trigger,
       apiUsage,
+      // Surfaced rather than swallowed: the prices are fresh but the dashboard
+      // snapshot behind them is not, and the caller should be able to tell.
+      analyticsPublished: analyticsError == null,
+      analyticsError,
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown sync error"
