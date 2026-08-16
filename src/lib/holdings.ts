@@ -41,11 +41,26 @@ export type HoldingsTransactionResult = {
   netQty: number
   /** FIFO P/L attributable to this transaction alone. null for buys. */
   realizedPnl: number | null
+  /** FIFO cost basis of the open lots immediately after this transaction. */
+  costBasisRemaining: number
+}
+
+/** Position state on a given date, carried forward between transactions. */
+export type HoldingStateOnDate = {
+  netQty: number
+  costBasisRemaining: number
+  /** costBasisRemaining / netQty, or 0 when nothing is held. */
+  avgCostRemaining: number
 }
 
 export type HoldingsReplay = {
   holdings: Holdings
   transactions: HoldingsTransactionResult[]
+}
+
+/** Cost basis of whatever is still open, at this point in the replay. */
+function openLotCostBasis(lots: Lot[]): number {
+  return lots.reduce((sum, lot) => sum + lot.remaining * lot.buyPrice, 0)
 }
 
 /**
@@ -88,6 +103,7 @@ export function replayHoldings(transactions: Transaction[]): HoldingsReplay {
         transactionDate: tx.transaction_date,
         netQty: runningNetQty,
         realizedPnl: null,
+        costBasisRemaining: openLotCostBasis(lots),
       })
     } else {
       // sell — FIFO consume from oldest non-empty lots
@@ -114,6 +130,7 @@ export function replayHoldings(transactions: Transaction[]): HoldingsReplay {
         transactionDate: tx.transaction_date,
         netQty: runningNetQty,
         realizedPnl: realizedThisSell,
+        costBasisRemaining: openLotCostBasis(lots),
       })
     }
   }
@@ -150,14 +167,20 @@ export function computeHoldings(transactions: Transaction[]): Holdings {
 /**
  * Carry a completed FIFO replay across an ordered date range without replaying
  * transaction history for every date.
+ *
+ * `dates` must be ascending; the replay's transactions already are. Both
+ * quantity and cost basis are carried, because a date before a product's first
+ * recorded price still needs a defensible value — see the cost fallback in the
+ * analytics engine.
  */
-export function netQuantityByDate(
+export function holdingStateByDate(
   transactions: HoldingsTransactionResult[],
   dates: string[]
-): Map<string, number> {
-  const quantities = new Map<string, number>()
+): Map<string, HoldingStateOnDate> {
+  const states = new Map<string, HoldingStateOnDate>()
   let transactionIndex = 0
   let netQty = 0
+  let costBasisRemaining = 0
 
   for (const date of dates) {
     while (
@@ -165,12 +188,17 @@ export function netQuantityByDate(
       transactions[transactionIndex].transactionDate <= date
     ) {
       netQty = transactions[transactionIndex].netQty
+      costBasisRemaining = transactions[transactionIndex].costBasisRemaining
       transactionIndex += 1
     }
-    quantities.set(date, netQty)
+    states.set(date, {
+      netQty,
+      costBasisRemaining,
+      avgCostRemaining: netQty > 0 ? costBasisRemaining / netQty : 0,
+    })
   }
 
-  return quantities
+  return states
 }
 
 /** Holdings as of a specific date (inclusive). Used for snapshot rebuild. */

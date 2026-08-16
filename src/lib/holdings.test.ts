@@ -3,7 +3,7 @@ import type { Transaction } from "@/lib/supabase"
 import {
   computeHoldings,
   computeHoldingsAsOf,
-  netQuantityByDate,
+  holdingStateByDate,
   replayHoldings,
 } from "./holdings"
 
@@ -59,24 +59,28 @@ describe("replayHoldings", () => {
         transactionDate: "2026-01-01",
         netQty: 10,
         realizedPnl: null,
+        costBasisRemaining: 100,
       },
       {
         transactionId: "buy-2",
         transactionDate: "2026-01-02",
         netQty: 15,
         realizedPnl: null,
+        costBasisRemaining: 200,
       },
       {
         transactionId: "sell-1",
         transactionDate: "2026-01-03",
         netQty: 3,
         realizedPnl: 160,
+        costBasisRemaining: 60,
       },
       {
         transactionId: "sell-2",
         transactionDate: "2026-01-04",
         netQty: 0,
         realizedPnl: -15,
+        costBasisRemaining: 0,
       },
     ])
   })
@@ -91,11 +95,18 @@ describe("replayHoldings", () => {
       "2026-01-05",
     ]
     const replay = replayHoldings([...transactions].reverse())
-    const quantities = netQuantityByDate(replay.transactions, dates)
+    const states = holdingStateByDate(replay.transactions, dates)
 
-    expect([...quantities.values()]).toEqual([0, 10, 15, 3, 0, 0])
+    expect([...states.values()].map((state) => state.netQty)).toEqual([0, 10, 15, 3, 0, 0])
+
+    // Carrying state forward must agree with replaying history per date, for
+    // cost basis as well as quantity — the chart's pre-tracking fallback
+    // depends on the cost figure being right, not just the quantity.
     for (const date of dates) {
-      expect(quantities.get(date)).toBe(computeHoldingsAsOf(transactions, date).netQty)
+      const expected = computeHoldingsAsOf(transactions, date)
+      expect(states.get(date)!.netQty).toBe(expected.netQty)
+      expect(states.get(date)!.costBasisRemaining).toBeCloseTo(expected.costBasisRemaining, 6)
+      expect(states.get(date)!.avgCostRemaining).toBeCloseTo(expected.avgCostRemaining, 6)
     }
   })
 })
