@@ -27,19 +27,22 @@ export default function DashboardV2Page() {
 
   const { data, loading, error, refresh } = useDashboard({ portfolioId, timeframe })
 
-  // Fall back to fixtures when the BFF is absent so every section stays reviewable
-  // while the backend branch is still unmerged.
+  // Fixtures render every section — including the stale, unknown and
+  // missing-history states — without a database behind them.
   //
-  // Development only, deliberately. In production a failed request must surface as
-  // the honest error state below — rendering a plausible-looking total value from
-  // fabricated data is precisely the misrepresentation PRD §12 exists to prevent,
-  // and an amber banner is not enough to stop someone reading the headline number
-  // at a glance and believing it.
+  // This is opt-in via ?fixtures=1, never automatic. It used to fall back on its
+  // own whenever the request failed, which meant a missing migration silently
+  // produced a complete, plausible dashboard built from invented numbers. That
+  // reads as a miscalculating dashboard rather than an absent one, and the
+  // amber banner below was not enough to prevent exactly that confusion.
+  //
+  // A wrong number is worse than no number here: the entire point of PRD §12 is
+  // that the dashboard must never misrepresent the state of its own data.
   useEffect(() => {
-    if (process.env.NODE_ENV !== "development") return
-    if (error && !data) setUseFixture(true)
-    if (data) setUseFixture(false)
-  }, [error, data])
+    if (typeof window === "undefined") return
+    const wanted = new URLSearchParams(window.location.search).get("fixtures") === "1"
+    setUseFixture(wanted && process.env.NODE_ENV === "development")
+  }, [])
 
   const envelope = data ?? (useFixture ? FIXTURE_ENVELOPE : null)
   const payload: DashboardPayload | null = envelope?.data ?? null
@@ -78,10 +81,13 @@ export default function DashboardV2Page() {
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">Showing fixture data</p>
+            <p className="font-medium">
+              Every number below is fake — this is fixture data, not your portfolio
+            </p>
             <p className="text-xs opacity-90">
-              {error ?? "/api/dashboard unavailable"}. Sections below use the hostile fixture so edge
-              cases stay reviewable until the backend branch merges.
+              Rendered because <code>?fixtures=1</code> is set, so the stale, unknown and
+              missing-history states stay reviewable without a database. Remove it from the URL
+              to see real data.
             </p>
           </div>
         </div>
