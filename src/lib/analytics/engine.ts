@@ -7,12 +7,10 @@ import {
 } from "@/lib/dashboard/contract"
 import type {
   ActivityItem,
-  InsightPayload,
   PortfolioAllocation,
   PortfolioPerformance,
   PortfolioSummary,
   Position,
-  PositionSignal,
   ProductCategory,
   Timeframe,
   ValueChange,
@@ -29,154 +27,11 @@ import type { Product, Transaction } from "@/lib/supabase"
 import { supabase } from "@/lib/supabase-server"
 import { effectiveCategory } from "./categorize"
 import { computeHoldingPeriod } from "./holding-period"
-import { concentrationTransition } from "./insights/concentration"
-import { drawdownTransition } from "./insights/drawdown"
-import {
-  outsizedMoveState,
-  outsizedMoveTransition,
-  type OutsizedMoveState,
-} from "./insights/outsized-move"
-import { insightSeverity } from "./insights/severity"
-import { signalTransition } from "./insights/signal-transition"
+import { persistInsightTransitions } from "./insights/persistence"
 import { computeTrackedAth } from "./tracked-ath"
 
 type ProductRow = Product & { category_override?: ProductCategory | null }
 type Source = { syncRunId?: string; transactionId?: string }
-
-async function persistInsightTransitions(
-  snapshotId: string,
-  positions: Position[],
-  at: string
-): Promise<number> {
-  if (!positions.length) return 0
-
-  const ids = positions.map((position) => position.productId)
-  const { data: states } = await supabase
-    .from("position_signal_state")
-    .select("*")
-    .in("product_id", ids)
-  const stateById = new Map((states ?? []).map((state) => [state.product_id, state]))
-  const events: Array<Record<string, unknown>> = []
-
-  for (const position of positions) {
-    const old = stateById.get(position.productId) as
-      | {
-          last_signal: PositionSignal | null
-          last_outsized_move_state: OutsizedMoveState
-          last_concentration_state: boolean | null
-          last_drawdown_state: boolean | null
-        }
-      | undefined
-
-    const signal = signalTransition(old?.last_signal ?? null, position.signal)
-    const move = outsizedMoveTransition(
-      old?.last_outsized_move_state ?? "NORMAL",
-      position.valueChangePct["1M"]
-    )
-    const concentration = concentrationTransition(
-      old?.last_concentration_state ?? null,
-      position.portfolioShare
-    )
-    const drawdown = drawdownTransition({
-      wasInDrawdown: old?.last_drawdown_state ?? null,
-      drawdownPct: position.drawdownFromAthPct,
-      trackedAth: position.trackedAth == null ? null : position.trackedAth / 100,
-      trackedAthDate: position.trackedAthDate,
-    })
-
-    const add = (
-      type: string,
-      payload: InsightPayload,
-      category: string,
-      headline: string,
-      state = "active"
-    ) =>
-      events.push({
-        type,
-        entity_id: position.productId,
-        state,
-        severity: insightSeverity(payload),
-        triggered_at: at,
-        resolved_at: state === "resolved" ? at : null,
-        snapshot_id: snapshotId,
-        dedupe_key: `${snapshotId}:${position.productId}:${type}`,
-        payload: { ...payload, category, headline },
-      })
-
-    if (signal) {
-      add(
-        "signal_transition",
-        signal,
-        signal.toSignal === "Declining" || signal.toSignal === "Cooling"
-          ? "needs_attention"
-          : "signal_change",
-        `${signal.fromSignal} → ${signal.toSignal}`
-      )
-    }
-
-    if (move) {
-      add(
-        "outsized_move",
-        move,
-        move.direction === "down" ? "needs_attention" : "positive",
-        `${move.direction === "down" ? "Down" : "Up"} ${(Math.abs(move.movePct) * 100).toFixed(1)}% (1M)`,
-        move.toState === "NORMAL" ? "resolved" : "active"
-      )
-    }
-
-    if (concentration) {
-      if (concentration.resolved) {
-        await supabase
-          .from("insight_events")
-          .update({ state: "resolved", resolved_at: at })
-          .eq("entity_id", position.productId)
-          .eq("type", "concentration")
-          .eq("state", "active")
-      } else {
-        add(
-          "concentration",
-          concentration.payload,
-          "needs_attention",
-          `Concentration: ${(position.portfolioShare * 100).toFixed(1)}% of portfolio`
-        )
-      }
-    }
-
-    if (drawdown) {
-      if (drawdown.resolved) {
-        await supabase
-          .from("insight_events")
-          .update({ state: "resolved", resolved_at: at })
-          .eq("entity_id", position.productId)
-          .eq("type", "drawdown")
-          .eq("state", "active")
-      } else {
-        add(
-          "drawdown",
-          drawdown.payload,
-          "needs_attention",
-          `${(Math.abs(drawdown.payload.drawdownPct) * 100).toFixed(1)}% below Tracked ATH`
-        )
-      }
-    }
-
-    await supabase.from("position_signal_state").upsert({
-      product_id: position.productId,
-      last_signal: position.signal,
-      last_outsized_move_state: outsizedMoveState(position.valueChangePct["1M"]),
-      last_concentration_state: position.portfolioShare >= 0.2,
-      last_drawdown_state:
-        position.drawdownFromAthPct != null && position.drawdownFromAthPct <= -0.15,
-      updated_at: at,
-    })
-  }
-
-  if (events.length) {
-    const { error } = await supabase.from("insight_events").insert(events)
-    if (error) throw new Error(error.message)
-  }
-  return events.length
-}
 
 function dateMinus(date: string, days: number): string {
   const value = new Date(`${date}T00:00:00Z`)
