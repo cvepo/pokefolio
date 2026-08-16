@@ -23,13 +23,13 @@ export function TimeframeRow({ timeframes, active, onSelect }: TimeframeRowProps
 
   return (
     <div className="xl:hidden">
-      <div className="flex items-baseline justify-between mb-1.5">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+      <div className="flex items-baseline justify-between mb-1">
+        <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
           Value Change
         </h2>
-        <span className="text-[10px] text-muted-foreground">all windows</span>
+        <span className="text-[9px] text-muted-foreground">all windows</span>
       </div>
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1">
         {TIMEFRAMES.map((tf) => {
           const row = byKey.get(tf)
           const pct = row?.valueChangePct ?? null
@@ -42,19 +42,19 @@ export function TimeframeRow({ timeframes, active, onSelect }: TimeframeRowProps
               type="button"
               onClick={() => onSelect(tf)}
               className={cn(
-                "rounded-md border px-2 py-2 text-left transition-colors",
+                "rounded-sm border px-1.5 py-1.5 text-left transition-colors",
                 active === tf
                   ? "border-primary bg-primary/5"
                   : "border-border bg-card hover:bg-accent/40"
               )}
             >
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="flex items-center justify-between gap-0.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {tf}
                 </span>
                 {incomplete && (
                   <span
-                    className="text-[8px] font-medium uppercase text-amber-600 dark:text-amber-400"
+                    className="text-[7px] font-medium uppercase text-amber-600 dark:text-amber-400"
                     title="Shorter span than the label implies"
                   >
                     Partial
@@ -63,7 +63,7 @@ export function TimeframeRow({ timeframes, active, onSelect }: TimeframeRowProps
               </div>
               <p
                 className={cn(
-                  "text-sm font-bold tabular-nums mt-0.5",
+                  "text-xs font-bold tabular-nums mt-0.5",
                   pct == null && "text-muted-foreground",
                   tone === true && "text-emerald-500",
                   tone === false && "text-red-500"

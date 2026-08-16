@@ -30,7 +30,7 @@ type ValueHeaderProps = {
 
 /**
  * Top strip: total value (hero) → Value Change → optional timeframe chips → sync.
- * At ≥xl this reads as one dense ticker row (Bloomberg-style).
+ * Compact ticker for the viewport-locked terminal shell.
  */
 export function ValueHeader({
   summary,
@@ -52,16 +52,16 @@ export function ValueHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3",
-        "xl:flex-row xl:items-center xl:gap-4 xl:flex-wrap 3xl:flex-nowrap"
+        "flex flex-col gap-1.5",
+        "xl:flex-row xl:items-center xl:gap-3 xl:flex-nowrap min-w-0"
       )}
     >
-      <div className="flex items-baseline gap-3 shrink-0 min-w-0">
+      <div className="flex items-baseline gap-2.5 shrink-0 min-w-0">
         <div>
-          <p className="text-3xl xl:text-[2rem] 3xl:text-4xl font-bold tabular-nums leading-none tracking-tight">
+          <p className="text-2xl xl:text-[1.75rem] 3xl:text-3xl font-bold tabular-nums leading-none tracking-tight">
             {formatCents(summary.totalValue)}
           </p>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mt-1">
+          <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">
             Portfolio value
           </p>
         </div>
@@ -69,14 +69,14 @@ export function ValueHeader({
         {primaryChange && pair !== "—" ? (
           <div
             className={cn(
-              "flex items-center gap-1 text-sm font-medium tabular-nums",
+              "flex items-center gap-1 text-xs font-medium tabular-nums",
               tone === true && "text-emerald-500",
               tone === false && "text-red-500",
               tone == null && "text-muted-foreground"
             )}
           >
-            {tone === true && <TrendingUp size={14} aria-hidden />}
-            {tone === false && <TrendingDown size={14} aria-hidden />}
+            {tone === true && <TrendingUp size={12} aria-hidden />}
+            {tone === false && <TrendingDown size={12} aria-hidden />}
             <span>
               {pair}
               <span className="text-muted-foreground font-normal">
@@ -86,22 +86,22 @@ export function ValueHeader({
             </span>
             {!primaryChange.hasFullHistory && (
               <span
-                className="text-[9px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded"
+                className="text-[8px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded-sm"
                 title="History starts after this window began"
               >
-                Partial history
+                Partial
               </span>
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground tabular-nums">
+          <p className="text-xs text-muted-foreground tabular-nums">
             <span className="font-medium">—</span> Value Change (need more history)
           </p>
         )}
       </div>
 
       {showInlineTimeframes && (
-        <div className="hidden xl:flex flex-1 items-stretch gap-1.5 min-w-0">
+        <div className="hidden xl:flex flex-1 items-stretch gap-1 min-w-0">
           {TIMEFRAMES.map((tf) => {
             const row = timeframes.find((t) => t.timeframe === tf)
             const pct = row?.valueChangePct ?? null
@@ -115,19 +115,19 @@ export function ValueHeader({
                 type="button"
                 onClick={() => onSelectTimeframe(tf)}
                 className={cn(
-                  "flex-1 min-w-0 rounded-md border px-2 py-1.5 text-left transition-colors",
+                  "flex-1 min-w-0 rounded-sm border px-1.5 py-1 text-left transition-colors",
                   active
                     ? "border-primary bg-primary/5"
                     : "border-border bg-card hover:bg-accent/40"
                 )}
               >
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="flex items-center justify-between gap-0.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {tf}
                   </span>
                   {incomplete && (
                     <span
-                      className="text-[8px] font-medium uppercase text-amber-600 dark:text-amber-400"
+                      className="text-[7px] font-medium uppercase text-amber-600 dark:text-amber-400"
                       title="Shorter span than the label implies"
                     >
                       Partial
@@ -136,7 +136,7 @@ export function ValueHeader({
                 </div>
                 <p
                   className={cn(
-                    "text-xs font-bold tabular-nums mt-0.5",
+                    "text-[11px] font-bold tabular-nums leading-tight",
                     pct == null && "text-muted-foreground",
                     chipTone === true && "text-emerald-500",
                     chipTone === false && "text-red-500"
@@ -162,7 +162,7 @@ function SyncFreshnessPill({ sync, asOf }: { sync: SyncStatusPayload; asOf: stri
   return (
     <div
       className={cn(
-        "inline-flex flex-col items-end gap-0.5 rounded-md border px-2.5 py-1.5 text-right",
+        "inline-flex flex-col items-end gap-0 rounded-sm border px-2 py-1 text-right",
         tone === "ok" && "border-emerald-500/30 bg-emerald-500/5",
         tone === "warn" && "border-amber-500/40 bg-amber-500/10",
         tone === "bad" && "border-red-500/40 bg-red-500/10",
@@ -172,7 +172,7 @@ function SyncFreshnessPill({ sync, asOf }: { sync: SyncStatusPayload; asOf: stri
     >
       <span
         className={cn(
-          "text-[11px] font-semibold flex items-center gap-1.5 tabular-nums",
+          "text-[10px] font-semibold flex items-center gap-1 tabular-nums",
           tone === "ok" && "text-emerald-600 dark:text-emerald-400",
           tone === "warn" && "text-amber-700 dark:text-amber-300",
           tone === "bad" && "text-red-600 dark:text-red-400",
@@ -187,7 +187,7 @@ function SyncFreshnessPill({ sync, asOf }: { sync: SyncStatusPayload; asOf: stri
         </span>
         {syncSuccessLabel(sync)}
       </span>
-      <span className="text-[10px] text-muted-foreground tabular-nums">
+      <span className="text-[9px] text-muted-foreground tabular-nums">
         {syncStateLabel(sync.state)}
         {sync.stalePositionCount > 0 ? ` · ${sync.stalePositionCount} stale` : ""}
         {sync.productsFailed > 0 ? ` · ${sync.productsFailed} failed` : ""}
