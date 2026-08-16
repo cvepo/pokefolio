@@ -12,10 +12,11 @@ import type {
   Position,
   ProductCategory,
   Timeframe,
+  ValuationBasis,
   ValueChange,
 } from "@/lib/dashboard/contract"
 import {
-  netQuantityByDate,
+  holdingStateByDate,
   replayHoldings,
 } from "@/lib/holdings"
 import {
@@ -47,6 +48,7 @@ function dateMinus(date: string, days: number): string {
 function buildPerformance(
   actualByDate: Map<string, number>,
   projectedByDate: Map<string, number>,
+  basisByDate: Map<string, ValuationBasis>,
   today: string,
   requested: Timeframe
 ): PortfolioPerformance & {
@@ -84,6 +86,7 @@ function buildPerformance(
         date,
         actual: toCentsOrNull(actualByDate.get(date)),
         projected: toCentsOrNull(projectedByDate.get(date)),
+        actualBasis: actualByDate.get(date) == null ? null : (basisByDate.get(date) ?? "market"),
       }))
   }
 
@@ -343,18 +346,44 @@ export async function publishAnalyticsSnapshot(
     const actualDates = daterange(earliest, today)
     const actualByDate = new Map(actualDates.map((date) => [date, 0]))
 
-    // Each product's FIFO history has already been walked once. Carry its net
-    // quantity forward through the calendar instead of re-sorting and replaying
-    // every transaction again for every date on this write path.
+    // Each product's FIFO history has already been walked once. Carry its state
+    // forward through the calendar instead of re-sorting and replaying every
+    // transaction again for every date on this write path.
+    //
+    // Where a product has no recorded price yet — every day between buying it
+    // and Pokefolio first tracking it — fall back to its cost basis, exactly as
+    // rebuildPortfolioSnapshots does, so /dashboard-v2 and /data agree (PRD
+    // §21). Dropping those positions to zero instead understated the early
+    // chart by five figures. The fallback is counted, not hidden: basisByDate
+    // reports it so the UI can mark the span rather than passing cost off as
+    // tracked market value (PRD §8).
+    const pricedByDate = new Map(actualDates.map((date) => [date, 0]))
+    const costOnlyByDate = new Map(actualDates.map((date) => [date, 0]))
+
     for (const [productId, replay] of replayByProduct) {
-      const quantities = netQuantityByDate(replay.transactions, actualDates)
+      const states = holdingStateByDate(replay.transactions, actualDates)
       for (const date of actualDates) {
-        const quantity = quantities.get(date) ?? 0
+        const state = states.get(date)
+        if (!state || state.netQty <= 0) continue
         const price = priceOnOrBefore(priceIndex, productId, date)
-        if (quantity > 0 && price != null) {
-          actualByDate.set(date, (actualByDate.get(date) ?? 0) + quantity * price)
+        if (price != null) {
+          actualByDate.set(date, (actualByDate.get(date) ?? 0) + state.netQty * price)
+          pricedByDate.set(date, (pricedByDate.get(date) ?? 0) + 1)
+        } else {
+          actualByDate.set(
+            date,
+            (actualByDate.get(date) ?? 0) + state.netQty * state.avgCostRemaining
+          )
+          costOnlyByDate.set(date, (costOnlyByDate.get(date) ?? 0) + 1)
         }
       }
+    }
+
+    const basisByDate = new Map<string, ValuationBasis>()
+    for (const date of actualDates) {
+      const priced = pricedByDate.get(date) ?? 0
+      const costOnly = costOnlyByDate.get(date) ?? 0
+      basisByDate.set(date, costOnly === 0 ? "market" : priced === 0 ? "cost" : "partial")
     }
 
     const projectedRows = await computeProjectedSnapshots(
@@ -370,6 +399,7 @@ export async function publishAnalyticsSnapshot(
     const performance = buildPerformance(
       actualByDate,
       projectedByDate,
+      basisByDate,
       today,
       opts.timeframe ?? "1M"
     )
