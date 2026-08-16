@@ -202,6 +202,58 @@ The value chart was separately verified across all 569 days (A9): 0 differ.
 **Failure isolation (A10) — CONFIRMED in production.** Manual syncs now log
 `success 20/20` where the same run previously logged `failed`.
 
+### Open question — the Holding period pane should probably become something else
+
+Flagged 2026-08-16. The pane is built to spec (PRD §14: value-weighted age,
+oldest open lot, lots aged 335-364 days) but earns very little of its space in
+practice. Measured against the live portfolio:
+
+| Observation | Value |
+|---|---|
+| Positions | 20 |
+| Distinct buy dates across all of them | **4** (2025-01-25, 02-02, 02-09, 05-09) |
+| Distinct "oldest open lot" ages | **4** |
+| Age range of every open lot | 464-568 days |
+| Lots approaching one year | **0** |
+| Sell transactions, ever | **0** |
+
+Why it falls flat:
+
+1. **"Approaching one year" is structurally zero.** Everything held is already
+   past a year, so the counter cannot become non-zero until something new is
+   bought and then aged ~11 months. It is a permanently empty stat.
+2. **Its stated purpose is already moot.** §14 justifies the 335-364 day window
+   by long- vs short-term capital gains planning. Every lot is already
+   long-term, so there is no decision left to inform.
+3. **Nothing has ever been sold**, so tax-lot planning is hypothetical anyway.
+4. **The two age figures barely differ and never move.** With only four purchase
+   dates, value-weighted age and oldest-lot age are nearly the same number, and
+   both advance by exactly one day per day. On a dashboard whose entire premise
+   is "tell me what changed" (§10), a pane that is identical every morning is
+   the weakest thing on screen.
+
+None of this is a defect — the spec was followed. It is that §14 was written
+before there was data to check it against, and the portfolio's actual shape
+(few purchase dates, no sales, everything already long-term) makes the metric
+uninformative.
+
+**Not decided — deliberately left open.** Candidates for the slot, all of which
+change day to day, in rough order of fit with §10's "what changed, then leave":
+
+- **Per-holding target prices / sell alerts** — already named as a fast-follow
+  in §3 and §22, and the most actionable thing missing.
+- **Ranked unrealized P/L contributors** — which positions actually move the
+  portfolio, rather than which are oldest.
+- **Concentration standing view** — currently only visible as a transient
+  insight event when a threshold is crossed; there is no way to see current
+  concentration without waiting for it to fire.
+- **True Investment Performance** (§6) — the deferred cash-flow-adjusted metric,
+  once it has its own spec.
+
+Holding period itself is worth keeping *somewhere* — it becomes genuinely useful
+the first time a sale is contemplated — but as a detail on the position or
+product page, not a permanent dashboard pane.
+
 ### Still open
 
 1. **Realized P/L parity is untested, not proven.** Every figure above matches,
