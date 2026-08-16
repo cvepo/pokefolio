@@ -40,6 +40,27 @@ export function isScheduledToday(settings: AppSettings, at: Date = new Date()): 
   return settings.sync_days.includes(weekdayInTimeZone(settings.sync_timezone, at))
 }
 
+/**
+ * Longest expected gap between successful scheduled runs. A daily schedule has
+ * a one-day window; a Monday/Thursday schedule has a four-day window across
+ * the Thursday-to-Monday boundary.
+ */
+export function expectedSyncWindowDays(settings: AppSettings): number {
+  const days = [...new Set(settings.sync_days)]
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    .sort((a, b) => a - b)
+  if (!days.length) return Infinity
+
+  let longestGap = 0
+  for (let index = 0; index < days.length; index += 1) {
+    const current = days[index]
+    const next = days[(index + 1) % days.length]
+    const gap = (next - current + 7) % 7 || 7
+    longestGap = Math.max(longestGap, gap)
+  }
+  return longestGap
+}
+
 /** Insert a run row at the start of a sync. Returns the row id, or null if logging is unavailable. */
 export async function startSyncRun(trigger: SyncTrigger): Promise<string | null> {
   const { data, error } = await supabase

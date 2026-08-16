@@ -27,10 +27,12 @@ import {
 import { computeProjectedSnapshots } from "@/lib/projected-snapshots"
 import type { Product, Transaction } from "@/lib/supabase"
 import { supabase } from "@/lib/supabase-server"
+import { expectedSyncWindowDays, getAppSettings } from "@/lib/sync-log"
 import { buildActivity } from "./activity"
 import { effectiveCategory } from "./categorize"
 import { computeHoldingPeriod } from "./holding-period"
 import { persistInsightTransitions } from "./insights/persistence"
+import { derivePriceStatus } from "./price-status"
 import { computeTrackedAth } from "./tracked-ath"
 
 type ProductRow = Product & { category_override?: ProductCategory | null }
@@ -132,7 +134,12 @@ export async function publishAnalyticsSnapshot(
     let txQuery = supabase.from("transactions").select("*, product:products(*)")
     if (opts.portfolioId) txQuery = txQuery.eq("portfolio_id", opts.portfolioId)
 
-    const [{ data: txRows, error: txError }, { data: portfolios }, { data: lastRun }] =
+    const [
+      { data: txRows, error: txError },
+      { data: portfolios },
+      { data: lastRun },
+      settings,
+    ] =
       await Promise.all([
         txQuery,
         supabase.from("portfolios").select("id,name"),
@@ -142,6 +149,7 @@ export async function publishAnalyticsSnapshot(
           .order("started_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
+        getAppSettings(),
       ])
     if (txError) throw new Error(txError.message)
 
@@ -161,6 +169,7 @@ export async function publishAnalyticsSnapshot(
         (lastRun as { failures?: Array<{ product_id: string }> } | null)?.failures ?? []
       ).map((failure) => failure.product_id)
     )
+    const syncWindowDays = expectedSyncWindowDays(settings)
     const replayByProduct = new Map(
       [...groups].map(([productId, rows]) => [productId, replayHoldings(rows)])
     )
@@ -177,6 +186,7 @@ export async function publishAnalyticsSnapshot(
       const latest = history.filter((point) => point.date <= today).at(-1)
       const current =
         latest?.price ?? (product.current_price == null ? null : Number(product.current_price))
+      const lastPricedAt = latest?.date ?? product.last_synced_at?.slice(0, 10) ?? null
       const changes = Object.fromEntries(
         TIMEFRAMES.map((timeframe) => {
           const start =
@@ -208,7 +218,7 @@ export async function publishAnalyticsSnapshot(
         value,
         product,
         current,
-        latest,
+        lastPricedAt,
         changes,
         signal,
         ath,
@@ -242,11 +252,16 @@ export async function publishAnalyticsSnapshot(
         realizedPnl: toCents(raw.value.realizedPnL),
         valueChangePct: raw.changes,
         signal: raw.signal,
-        // A failed lookup uses the last known-good price and must remain
-        // distinguishable from a position with a current market observation.
-        priceStatus:
-          raw.current == null ? "unknown" : failures.has(raw.productId) ? "stale" : "ok",
-        lastPricedAt: raw.latest?.date ?? null,
+        // A failed lookup and an observation older than the user's configured
+        // schedule both mean this valuation is using a last known-good price.
+        priceStatus: derivePriceStatus({
+          currentPrice: raw.current,
+          lastPricedAt: raw.lastPricedAt,
+          asOfDate: today,
+          failedLastSync: failures.has(raw.productId),
+          expectedWindowDays: syncWindowDays,
+        }),
+        lastPricedAt: raw.lastPricedAt,
         portfolioShare: totalValueDollars ? raw.marketValue / totalValueDollars : 0,
         holdingPeriod: computeHoldingPeriod(raw.value.lots, raw.current, today),
         trackedAth: toCentsOrNull(raw.ath?.price),
