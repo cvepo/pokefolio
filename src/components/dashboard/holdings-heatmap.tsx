@@ -1,11 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { Position, PositionsPayload } from "@/lib/dashboard/contract"
 import { formatCents, formatValueChangePct } from "@/lib/dashboard/format"
 import {
   heatmapFillCss,
+  heatmapImageUrl,
   heatmapNormalized,
+  heatmapTileScale,
   heatmapTileState,
 } from "@/lib/dashboard/heatmap"
 import { squarify } from "@/lib/dashboard/treemap"
@@ -32,23 +34,41 @@ const TILE_GAP = 2
  */
 export function HoldingsHeatmap({ positions }: HoldingsHeatmapProps) {
   const { min, max } = positions.heatmapColorDomain
-  const containerRef = useRef<HTMLDivElement>(null)
+  const observerRef = useRef<ResizeObserver | null>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
 
   // The pane is sized by the viewport-locked grid, so its pixel box is only
   // known at runtime. Measure it rather than assuming, and keep the numbers
   // concrete — the same reason the value chart avoids percentage heights.
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
+  //
+  // Deliberately a callback ref rather than useEffect + useRef. The panel mounts
+  // before the dashboard payload arrives, so on the first render this element
+  // does not exist yet; an effect with [] deps would find a null ref, bail, and
+  // never retry, leaving the treemap permanently measuring 0x0 and rendering
+  // nothing. A callback ref fires whenever the node actually appears.
+  const attachContainer = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect()
+    observerRef.current = null
+    if (!node) return
+
+    // Measure immediately, before wiring the observer. Chrome defers
+    // ResizeObserver callbacks while a tab is hidden, so relying on the observer
+    // for the first measurement means a dashboard opened in a background tab
+    // renders an entirely empty heatmap — and keeps it empty until something
+    // happens to resize it. A synchronous read is always available.
+    const initial = node.getBoundingClientRect()
+    setBox({ width: Math.floor(initial.width), height: Math.floor(initial.height) })
+
     const observer = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect
       if (!rect) return
       setBox({ width: Math.floor(rect.width), height: Math.floor(rect.height) })
     })
-    observer.observe(el)
-    return () => observer.disconnect()
+    observer.observe(node)
+    observerRef.current = observer
   }, [])
+
+  useEffect(() => () => observerRef.current?.disconnect(), [])
 
   const byId = new Map(positions.positions.map((p) => [p.productId, p]))
   const rects =
@@ -67,7 +87,7 @@ export function HoldingsHeatmap({ positions }: HoldingsHeatmapProps) {
           No open positions.
         </p>
       ) : (
-        <div ref={containerRef} className="relative w-full h-full min-h-0 min-w-0">
+        <div ref={attachContainer} className="relative w-full h-full min-h-0 min-w-0">
           {rects.map((rect) => {
             const position = byId.get(rect.id)
             if (!position) return null
@@ -98,6 +118,7 @@ function HeatmapTile({
   domainMax: number
   rect: { x: number; y: number; w: number; h: number }
 }) {
+  const [imageFailed, setImageFailed] = useState(false)
   const change1M = position.valueChangePct["1M"]
   const state = heatmapTileState(change1M, position.priceStatus)
   const isUnknown = state === "unknown"
@@ -108,13 +129,10 @@ function HeatmapTile({
 
   const width = Math.max(0, rect.w - TILE_GAP)
   const height = Math.max(0, rect.h - TILE_GAP)
-
-  // Drop content progressively rather than letting it overflow or clip. The
-  // tooltip always carries the full detail (PRD §15), so a small tile loses
-  // nothing that isn't recoverable on hover.
-  const showName = width >= 84 && height >= 46
-  const showFigures = width >= 52 && height >= 26
-  const showChange = width >= 74 && height >= 26
+  const scale = heatmapTileScale(width, height)
+  const imageUrl = imageFailed
+    ? null
+    : heatmapImageUrl(position.tcgplayerId, scale.imageSize)
 
   const title = [
     position.name,
@@ -138,40 +156,80 @@ function HeatmapTile({
         background: isUnknown ? undefined : fill,
       }}
       className={cn(
-        "overflow-hidden rounded-sm border px-1 py-0.5 flex flex-col justify-between",
+        "overflow-hidden rounded-sm border px-1.5 py-1 flex flex-col justify-between gap-0.5",
         isUnknown
           ? "border-border bg-[repeating-linear-gradient(-45deg,hsl(var(--muted)),hsl(var(--muted))_6px,hsl(var(--card))_6px,hsl(var(--card))_12px)]"
           : "border-border/80",
         state === "stale" && "ring-1 ring-inset ring-amber-500/60"
       )}
     >
-      {showName && (
-        <div className="flex items-start justify-between gap-1 min-w-0">
-          <p className="text-[10px] font-medium leading-tight line-clamp-2 min-w-0">
-            {position.name}
-          </p>
-          {state === "stale" && (
-            <span className="shrink-0 text-[8px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-500/15 px-1 rounded-sm">
-              Stale
-            </span>
-          )}
-          {position.priceStatus === "unknown" && (
-            <span className="shrink-0 text-[8px] font-bold uppercase tracking-wide text-muted-foreground bg-muted px-1 rounded-sm">
-              No price
-            </span>
-          )}
+      {scale.nameClass && (
+        <div className="flex items-start justify-between gap-1.5 min-w-0">
+          <div className="min-w-0 flex-1">
+            <p
+              className={cn("font-medium", scale.nameClass)}
+              style={{
+                display: "-webkit-box",
+                WebkitLineClamp: scale.nameLines,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {position.name}
+            </p>
+            {scale.showMeta && (
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">
+                {position.quantity} units · {position.setName}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col items-end gap-0.5 shrink-0">
+            {state === "stale" && (
+              <span className="text-[8px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-500/15 px-1 rounded-sm">
+                Stale
+              </span>
+            )}
+            {position.priceStatus === "unknown" && (
+              <span className="text-[8px] font-bold uppercase tracking-wide text-muted-foreground bg-muted px-1 rounded-sm">
+                No price
+              </span>
+            )}
+            {imageUrl && (
+              // Product shots are JPEGs on a white background. Sitting them on a
+              // white chip makes that background read as part of the thumbnail
+              // instead of a pasted rectangle; multiply hides the antialiased seam.
+              <span
+                className="rounded-sm bg-white overflow-hidden flex items-center justify-center"
+                style={{ width: scale.imageSize, height: scale.imageSize }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageUrl}
+                  alt=""
+                  aria-hidden
+                  loading="lazy"
+                  onError={() => setImageFailed(true)}
+                  className="w-full h-full object-contain mix-blend-multiply"
+                />
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      {showFigures && (
-        <div className="flex items-end justify-between gap-1 min-w-0 mt-auto">
-          <span className="text-[11px] font-semibold tabular-nums truncate">
+      {scale.valueClass && (
+        <div className="flex items-end justify-between gap-1.5 min-w-0 mt-auto">
+          {/* Never truncated: a clipped "$1,420.…" reads as a real number while
+              being wrong. The percentage is dropped first, then the name. */}
+          <span className={cn("font-semibold tabular-nums whitespace-nowrap", scale.valueClass)}>
             {position.priceStatus === "unknown" ? "—" : formatCents(position.marketValue)}
           </span>
-          {showChange && (
+          {scale.changeClass && (
             <span
               className={cn(
-                "text-[10px] font-semibold tabular-nums shrink-0",
+                "font-semibold tabular-nums whitespace-nowrap shrink-0",
+                scale.changeClass,
                 change1M == null && "text-muted-foreground",
                 change1M != null && change1M >= 0 && "text-emerald-600 dark:text-emerald-400",
                 change1M != null && change1M < 0 && "text-red-600 dark:text-red-400"
