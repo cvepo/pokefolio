@@ -126,13 +126,15 @@ export default function DashboardV2Page() {
             "gap-4 xl:gap-3 3xl:gap-2.5 4xl:gap-2"
           )}
         >
-          {/* Ticker: value + Value Change windows + freshness — §10 Q1/Q2 */}
-          <div className="col-span-1 xl:col-span-12 order-1 space-y-3 xl:space-y-2">
+          <div className="col-span-1 xl:col-span-12 order-1 space-y-3 xl:space-y-0">
             <ValueHeader
               summary={payload.summary}
               primaryChange={primaryChange}
               sync={payload.sync}
               asOf={envelope.asOf}
+              timeframes={payload.performance.timeframes}
+              activeTimeframe={timeframe}
+              onSelectTimeframe={setTimeframe}
             />
             <TimeframeRow
               timeframes={payload.performance.timeframes}
