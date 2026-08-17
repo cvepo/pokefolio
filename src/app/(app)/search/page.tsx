@@ -14,6 +14,17 @@ type SearchResult = {
   tcgplayerId: string
   variants: Array<{ id: string; condition: string; price: number }>
   priceHistoryCount?: number
+  /** Age of a cached price, in hours. null when fetched live just now. */
+  priceAgeHours?: number | null
+}
+
+/** Prices older than a sync gap are labelled rather than silently shown as current. */
+const STALE_AFTER_HOURS = 36
+
+function formatPriceAge(hours: number): string {
+  if (hours < 48) return `${Math.round(hours)}h old`
+  const days = Math.round(hours / 24)
+  return days < 60 ? `${days}d old` : `${Math.round(days / 30)}mo old`
 }
 
 /**
@@ -38,6 +49,7 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [meta, setMeta] = useState<{ apiDailyRequestsRemaining?: number } | null>(null)
+  const [source, setSource] = useState<"cache" | "justtcg" | null>(null)
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
   const [portfolioItems, setPortfolioItems] = useState<Set<string>>(new Set())
   const [addModal, setAddModal] = useState<AddModal>(null)
@@ -81,14 +93,15 @@ export default function SearchPage() {
     return () => document.removeEventListener("mousedown", onClickOutside)
   }, [portfolioPickerOpen])
 
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    if (!query.trim()) return
+  async function runSearch(q: string, forceFresh = false) {
     setLoading(true)
     setError("")
     setResults([])
 
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
+    // Cached results cost nothing; forceFresh spends one of the 100 daily
+    // JustTCG requests, so it is only ever triggered explicitly.
+    const url = `/api/search?q=${encodeURIComponent(q)}${forceFresh ? "&fresh=1" : ""}`
+    const res = await fetch(url)
     const data = await res.json()
 
     if (!res.ok) {
@@ -96,9 +109,16 @@ export default function SearchPage() {
     } else {
       setResults(data.data ?? [])
       setMeta(data._metadata ?? null)
+      setSource(data.source ?? null)
       if ((data.data ?? []).length === 0) setError("No sealed products found for that query.")
     }
     setLoading(false)
+  }
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault()
+    if (!query.trim()) return
+    await runSearch(query.trim())
   }
 
   function openAddModal(product: SearchResult) {
@@ -224,11 +244,24 @@ export default function SearchPage() {
         </button>
       </form>
 
-      {meta?.apiDailyRequestsRemaining != null && (
-        <p className="text-xs text-muted-foreground">
-          {meta.apiDailyRequestsRemaining} API requests remaining today
-        </p>
-      )}
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        {meta?.apiDailyRequestsRemaining != null && (
+          <span>{meta.apiDailyRequestsRemaining} API requests remaining today</span>
+        )}
+        {source === "cache" && (
+          <>
+            <span>Showing saved prices — no API request used</span>
+            <button
+              type="button"
+              onClick={() => runSearch(query.trim(), true)}
+              disabled={loading || !query.trim()}
+              className="underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+            >
+              Refresh prices
+            </button>
+          </>
+        )}
+      </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -294,7 +327,16 @@ export default function SearchPage() {
                       <p className="font-semibold text-sm">
                         {sealedVariant?.price ? formatCurrency(sealedVariant.price) : "—"}
                       </p>
-                      <p className="text-xs text-muted-foreground">Sealed</p>
+                      {product.priceAgeHours != null && product.priceAgeHours > STALE_AFTER_HOURS ? (
+                        <p
+                          className="text-xs text-amber-600 dark:text-amber-400"
+                          title="Cached price. Search again with Refresh prices for a current one."
+                        >
+                          {formatPriceAge(product.priceAgeHours)}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Sealed</p>
+                      )}
                     </div>
                     <button
                       onClick={() => openAddModal(product)}
