@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
@@ -53,6 +54,25 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center" aria-hidden>
+            <div className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-card px-2 text-muted-foreground">or</span>
+          </div>
+        </div>
+
+        <Link
+          href="/demo"
+          className="block w-full py-2 px-4 rounded-md border border-border text-sm font-medium text-center hover:bg-accent transition-colors"
+        >
+          View demo
+        </Link>
+        <p className="text-[11px] text-center text-muted-foreground -mt-3">
+          Sample collection — no password required
+        </p>
       </div>
     </div>
   )
