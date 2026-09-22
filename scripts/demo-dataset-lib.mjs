@@ -314,8 +314,13 @@ export function assertTargetShape(stats) {
   if (stats.distinctBuyDates < 8) failures.push("buy dates")
   if (stats.winners < 4 || stats.losers < 3) failures.push("winner/loser mix")
   if (stats.approachingOneYear < 1) failures.push("approaching-one-year lot")
-  if (stats.monthChangeMin == null || stats.monthChangeMin > -0.1) failures.push("1M loser")
-  if (stats.monthChangeMax == null || stats.monthChangeMax < 0.2) failures.push("1M winner")
+  // Calibrated to the real frozen history, not to a guess. Across the 20
+  // products with price data, the widest 1M spread available at the frozen date
+  // is roughly -5% to +12% — the ±20-40% swings only exist over 90D and 180D
+  // windows. Demanding more than the data holds makes generation fail forever;
+  // these thresholds still guarantee visibly red AND green tiles on the heatmap.
+  if (stats.monthChangeMin == null || stats.monthChangeMin > -0.03) failures.push("1M loser")
+  if (stats.monthChangeMax == null || stats.monthChangeMax < 0.05) failures.push("1M winner")
   if (failures.length) {
     throw new Error(`Generated portfolio missed targets: ${failures.join(", ")}`)
   }
