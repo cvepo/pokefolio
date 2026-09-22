@@ -15,7 +15,7 @@ import {
 import type { PerformancePoint, Timeframe, ValuationBasis } from "@/lib/dashboard/contract"
 import { centsToDollars } from "@/lib/dashboard/contract"
 import { formatCents } from "@/lib/dashboard/format"
-import { formatSnapshotDate } from "@/lib/utils"
+import { cn, formatSnapshotDate } from "@/lib/utils"
 import { estimatedValuationSpans, valuationBasisLabel } from "@/lib/dashboard/valuation-span"
 import { DashboardPanel } from "@/components/dashboard/panel"
 
@@ -30,13 +30,37 @@ type ValueChartProps = {
 }
 
 /**
- * Actual (solid) + Projected (dashed), both labelled — PRD §16.
- * Chart height is a concrete number from ResizeObserver (or fallback) —
- * never percentage / h-full (scrollbar resize loop).
+ * Two value series over the same window (PRD §16).
+ *
+ * "Projected" was the PRD's name for the second line and it misled: the word
+ * means forecast everywhere else in finance, while this series is the opposite
+ * — a backward-looking counterfactual. It takes the quantities held *today* and
+ * prices them on each past date, so the gap between the lines is the effect of
+ * the buying and selling actually done. The PRD says as much ("not a
+ * forward-looking forecast"); the label just did not.
+ *
+ * Renamed to "Today's holdings", which states what the series is rather than
+ * what it is not. The API field keeps its name — this is a display change, the
+ * same way Value Change is labelled honestly without renaming the data.
+ *
+ * Chart height is a concrete number from ResizeObserver (or fallback) — never
+ * percentage / h-full (scrollbar resize loop).
  */
+export type ValueSeriesMode = "actual" | "todays" | "both"
+
+const SERIES_MODES: Array<{ id: ValueSeriesMode; label: string }> = [
+  { id: "actual", label: "Actual" },
+  { id: "todays", label: "Today's" },
+  { id: "both", label: "Both" },
+]
 export function ValueChart({ series, seriesTimeframe, height: fallbackHeight = 200 }: ValueChartProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
   const [measuredHeight, setMeasuredHeight] = useState(0)
+  // Both by default: the comparison is the point of the pane, and isolating a
+  // line is for when the overlay gets busy.
+  const [mode, setMode] = useState<ValueSeriesMode>("both")
+  const showActual = mode === "actual" || mode === "both"
+  const showTodays = mode === "todays" || mode === "both"
 
   useEffect(() => {
     const el = bodyRef.current
@@ -63,8 +87,12 @@ export function ValueChart({ series, seriesTimeframe, height: fallbackHeight = 2
   // is the same kind of measurement.
   const estimatedSpans = estimatedValuationSpans(series)
 
+  // Scale to what is actually drawn — keeping a hidden series in the domain
+  // squashes the visible line into a corner of the pane.
   const values = rows.flatMap((r) =>
-    [r.actual, r.projected].filter((v): v is number => v != null && Number.isFinite(v))
+    [showActual ? r.actual : null, showTodays ? r.projected : null].filter(
+      (v): v is number => v != null && Number.isFinite(v)
+    )
   )
   const chartYDomain = (() => {
     if (values.length < 2) return undefined
@@ -80,9 +108,33 @@ export function ValueChart({ series, seriesTimeframe, height: fallbackHeight = 2
       title={`Portfolio value · ${seriesTimeframe}`}
       scrollBody={false}
       actions={
-        <span className="hidden 3xl:inline truncate max-w-[28rem] text-right">
-          Projected = today’s holdings × historical prices
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="hidden 3xl:inline truncate max-w-[22rem] text-right text-[10px]">
+            Today’s holdings = what you hold now, at past prices
+          </span>
+          <div
+            role="group"
+            aria-label="Which value series to show"
+            className="flex items-center rounded-sm border border-border overflow-hidden shrink-0"
+          >
+            {SERIES_MODES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setMode(option.id)}
+                aria-pressed={mode === option.id}
+                className={cn(
+                  "px-1.5 py-px text-[10px] font-medium transition-colors",
+                  mode === option.id
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
       }
       bodyClassName="!p-1.5 gap-1"
     >
@@ -146,7 +198,7 @@ export function ValueChart({ series, seriesTimeframe, height: fallbackHeight = 2
                   formatter={(value) => String(value)}
                   wrapperStyle={{ fontSize: 10 }}
                 />
-                <Line
+                {showActual && <Line
                   type="monotone"
                   dataKey="actual"
                   name="Actual"
@@ -155,18 +207,18 @@ export function ValueChart({ series, seriesTimeframe, height: fallbackHeight = 2
                   dot={false}
                   connectNulls={false}
                   isAnimationActive={false}
-                />
-                <Line
+                />}
+                {showTodays && <Line
                   type="monotone"
                   dataKey="projected"
-                  name="Projected"
+                  name="Today’s holdings"
                   stroke="#a78bfa"
                   strokeWidth={2}
                   strokeDasharray="6 4"
                   dot={false}
                   connectNulls={false}
                   isAnimationActive={false}
-                />
+                />}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -215,7 +267,7 @@ function ChartTooltip({
                     outline: key === "projected" ? "1px dashed currentColor" : undefined,
                   }}
                 />
-                {key === "actual" ? "Actual" : "Projected"}
+                {key === "actual" ? "Actual" : "Today’s holdings"}
               </span>
               <span className="font-medium tabular-nums">{display}</span>
             </li>
