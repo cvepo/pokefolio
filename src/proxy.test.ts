@@ -61,4 +61,35 @@ describe("proxy auth", () => {
   it("24e. the login route stays public", () => {
     expect(proxy(request("/login")).headers.get("x-middleware-next")).toBe("1")
   })
+
+  it("demo: /demo is public without a cookie", () => {
+    const res = proxy(request("/demo"))
+    expect(res.status).toBe(200)
+    expect(res.headers.get("x-middleware-next")).toBe("1")
+  })
+
+  it("demo: /demo/portfolios is public without a cookie", () => {
+    const res = proxy(request("/demo/portfolios"))
+    expect(res.status).toBe(200)
+    expect(res.headers.get("x-middleware-next")).toBe("1")
+  })
+
+  it("demo: a /demo prefix alone does not open /demonstration", () => {
+    const res = proxy(request("/demonstration"))
+    expect(res.status).toBe(307)
+    expect(res.headers.get("location")).toContain("/login")
+  })
+
+  it("demo: /api/dashboard stays 401 JSON without a cookie", async () => {
+    const res = proxy(request("/api/dashboard"))
+    expect(res.status).toBe(401)
+    expect(res.headers.get("location")).toBeNull()
+    await expect(res.json()).resolves.toEqual({ error: "Unauthorized" })
+  })
+
+  it("demo: /dashboard still redirects to login without a cookie", () => {
+    const res = proxy(request("/dashboard"))
+    expect(res.status).toBe(307)
+    expect(res.headers.get("location")).toContain("/login")
+  })
 })
