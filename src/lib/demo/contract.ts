@@ -32,6 +32,7 @@ import type {
   IsoDate,
   Timeframe,
 } from "@/lib/dashboard/contract"
+import type { CompareSeriesResponse } from "@/lib/compare-series"
 
 // ---------------------------------------------------------------------------
 // Frozen dataset — generated from real data, committed as a static module
@@ -174,6 +175,17 @@ export type DemoStore = {
   addTransaction(input: AddTransactionInput): { ok: true } | { ok: false; error: string }
 
   deleteTransaction(transactionId: string): void
+
+  /**
+   * Per-product price history for the Compare page, in the same shape
+   * `/api/compare/series` returns.
+   *
+   * Added after the first build: the contract originally exposed no way to
+   * reach price history, so the demo Compare page could only show a table and
+   * had no chart. The frozen dataset has full series for every seeded holding,
+   * so the real ComparisonChart works here — it just needed a way in.
+   */
+  getCompareSeries(): CompareSeriesResponse
 
   /** Discard every change and return to the seeded portfolio. */
   reset(): void

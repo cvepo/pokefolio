@@ -10,9 +10,10 @@ import type {
   Position,
   Timeframe,
 } from "@/lib/dashboard/contract"
-import { checkOversell } from "@/lib/holdings"
+import { computeHoldings, checkOversell } from "@/lib/holdings"
 import { buildPriceIndex } from "@/lib/price-lookup"
 import type { Transaction } from "@/lib/supabase"
+import type { CompareProduct, CompareSeriesResponse } from "@/lib/compare-series"
 import type {
   AddTransactionInput,
   DemoDataset,
@@ -305,6 +306,70 @@ export function createDemoStore(
       if (transactions.length === currentState.transactions.length) return
       currentState = { transactions, dirty: true }
       persist()
+    },
+
+    getCompareSeries(): CompareSeriesResponse {
+      // Same shape /api/compare/series returns, built from the frozen history
+      // so the real ComparisonChart renders without a server round trip.
+      const byProduct = new Map<string, DemoTransaction[]>()
+      for (const transaction of currentState.transactions) {
+        const list = byProduct.get(transaction.product_id) ?? []
+        list.push(transaction)
+        byProduct.set(transaction.product_id, list)
+      }
+
+      const seriesById = new Map(dataset.priceHistory.map((series) => [series.productId, series]))
+      const products: CompareProduct[] = []
+
+      for (const [productId, transactions] of byProduct) {
+        const holdings = computeHoldings(transactions as unknown as Transaction[])
+        // Compare is about what you still hold; a fully closed position has no
+        // position line to draw.
+        if (holdings.netQty <= 0) continue
+
+        const product = dataset.catalog.find((entry) => entry.id === productId)
+        const series = seriesById.get(productId)
+        if (!product || !series?.dates.length) continue
+
+        const history = series.dates.map(
+          (date, index) => [date, series.prices[index]] as [string, number]
+        )
+        const lastSnapshotDate = series.dates[series.dates.length - 1] ?? null
+        const currentPrice =
+          series.prices[series.prices.length - 1] ?? product.current_price ?? 0
+
+        products.push({
+          product_id: productId,
+          name: product.name,
+          set_name: product.set_name,
+          tcgplayer_id: product.tcgplayer_id,
+          qty: holdings.netQty,
+          avg_cost: holdings.avgCostRemaining,
+          current_price: currentPrice,
+          current_price_source: "snapshot",
+          last_snapshot_date: lastSnapshotDate,
+          history,
+        })
+      }
+
+      products.sort((a, b) => b.qty * b.current_price - a.qty * a.current_price)
+
+      const allDates = products.flatMap((product) => product.history.map(([date]) => date))
+      const earliest = allDates.length ? allDates.reduce((a, b) => (a < b ? a : b)) : dataset.asOf
+
+      return {
+        products,
+        meta: {
+          as_of_date: dataset.asOf,
+          earliest_date: earliest,
+          products_current: products.length,
+          products_total: products.length,
+          total_starting_value: products.reduce((sum, product) => {
+            const first = product.history[0]?.[1] ?? 0
+            return sum + first * product.qty
+          }, 0),
+        },
+      }
     },
 
     reset() {

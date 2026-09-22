@@ -55,6 +55,12 @@ export function buildPriceSeries(rows) {
   return byProduct
 }
 
+/** Whole days from `from` to `to`, both "YYYY-MM-DD". */
+function daysBetweenDates(from, to) {
+  const ms = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)
+  return Math.round(ms / 86400000)
+}
+
 function buildCandidates(products, priceByProduct, asOf) {
   const productById = new Map(products.map((product) => [product.id, product]))
   const candidates = []
@@ -62,6 +68,19 @@ function buildCandidates(products, priceByProduct, asOf) {
     const product = productById.get(productId)
     const currentPoint = pointOnOrBefore(points, asOf)
     if (!product || !currentPoint) continue
+
+    // Require history that actually reaches the frozen date.
+    //
+    // A JustTCG re-slug left ~14 pairs of product rows sharing a tcgplayer_id
+    // (see supabase/migrations/003), and the abandoned twin of each pair still
+    // carries a short stub of history that stops months earlier. Those rows
+    // satisfy "has some history" but produce a near-empty Compare line, a null
+    // 1M change and a permanently stale price. Selecting on freshness picks the
+    // live row of each pair without having to special-case the duplicates.
+    const lastPoint = points[points.length - 1]
+    const staleDays = daysBetweenDates(lastPoint.date, asOf)
+    if (staleDays > 7) continue
+    if (points.length < 100) continue
     const monthAgo = pointOnOrBefore(points, dateMinus(asOf, 30))
     const buyOptions = TARGET_AGES.map((age) => pointOnOrBefore(points, dateMinus(asOf, age)))
       .filter(Boolean)

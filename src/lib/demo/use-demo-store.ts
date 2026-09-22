@@ -60,6 +60,7 @@ export function useDemoStore(): DemoStore & { revision: number } {
     getProduct: store.getProduct.bind(store),
     searchProducts: store.searchProducts.bind(store),
     getTransactions: store.getTransactions.bind(store),
+    getCompareSeries: store.getCompareSeries.bind(store),
     addTransaction,
     deleteTransaction,
     reset,
