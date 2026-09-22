@@ -223,7 +223,6 @@ export default function DemoPortfolioDetailPage() {
               <input
                 type="number"
                 min={1}
-                max={sellingPosition.quantity}
                 value={sellQty}
                 onChange={(e) => setSellQty(e.target.value)}
                 className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
