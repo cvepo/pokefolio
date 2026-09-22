@@ -9,7 +9,6 @@ import { triggerLabel, useSyncStatus } from "@/lib/use-sync-status"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard-v2", label: "Dashboard v2", icon: LayoutDashboard },
   { href: "/portfolios", label: "Portfolios", icon: FolderOpen },
   { href: "/compare", label: "Compare", icon: LineChart },
   { href: "/search", label: "Search", icon: Search },

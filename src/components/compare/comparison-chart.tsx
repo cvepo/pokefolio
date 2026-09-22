@@ -77,94 +77,91 @@ export function ComparisonChart({
           {products.length} selected products have prices.
         </p>
       )}
-      {/* Fixed height + numeric ResponsiveContainer height avoids scrollbar resize loops */}
-      <div className="w-full overflow-x-auto">
-        <div className="min-w-[640px] h-[480px]">
-          <ResponsiveContainer width="100%" height={480}>
-            <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                tickLine={false}
-                axisLine={false}
-                interval={tickInterval}
-                tickFormatter={(v) => formatSnapshotDate(String(v))}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                tickLine={false}
-                axisLine={false}
-                width={64}
-                tickFormatter={(v) =>
-                  view === "position_abs"
-                    ? formatCurrency(Number(v)).replace(/\.00$/, "")
-                    : `${Number(v).toFixed(0)}%`
-                }
-              />
-              <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} />
-              <Tooltip
-                content={
-                  <CompareTooltip
-                    products={products}
-                    view={view}
-                    anchors={anchors}
-                    hoveredId={hoveredId}
-                    isCombined={isCombined}
-                  />
-                }
-              />
-              {isCombined ? (
-                <Line
-                  type="linear"
-                  dataKey="combined"
-                  name="Combined"
-                  stroke="#06b6d4"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                  connectNulls={false}
+      <div className="w-full h-[480px] overflow-hidden">
+        <ResponsiveContainer width="100%" height={480}>
+          <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tickLine={false}
+              axisLine={false}
+              interval={tickInterval}
+              tickFormatter={(v) => formatSnapshotDate(String(v))}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tickLine={false}
+              axisLine={false}
+              width={64}
+              tickFormatter={(v) =>
+                view === "position_abs"
+                  ? formatCurrency(Number(v)).replace(/\.00$/, "")
+                  : `${Number(v).toFixed(0)}%`
+              }
+            />
+            <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} />
+            <Tooltip
+              content={
+                <CompareTooltip
+                  products={products}
+                  view={view}
+                  anchors={anchors}
+                  hoveredId={hoveredId}
+                  isCombined={isCombined}
                 />
-              ) : (
-                products.flatMap((p) => {
-                  const isolated = hoveredId != null
-                  const emphasis = !isolated || hoveredId === p.product_id
-                  const opacity = emphasis ? 1 : 0.2
-                  const width = hoveredId === p.product_id ? 2.5 : 1.75
-                  const stroke = colors[p.product_id] ?? p.color
-                  return [
-                    <Line
-                      key={p.product_id}
-                      type="linear"
-                      dataKey={p.product_id}
-                      name={p.name}
-                      stroke={stroke}
-                      strokeWidth={width}
-                      strokeOpacity={opacity}
-                      dot={false}
-                      isAnimationActive={false}
-                      connectNulls={false}
-                    />,
-                    <Line
-                      key={`${p.product_id}__dashed`}
-                      type="linear"
-                      dataKey={`${p.product_id}__dashed`}
-                      name={`${p.name} (stale fill)`}
-                      stroke={stroke}
-                      strokeWidth={width}
-                      strokeOpacity={opacity}
-                      strokeDasharray="4 4"
-                      dot={false}
-                      isAnimationActive={false}
-                      connectNulls={false}
-                      legendType="none"
-                    />,
-                  ]
-                })
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+              }
+            />
+            {isCombined ? (
+              <Line
+                type="linear"
+                dataKey="combined"
+                name="Combined"
+                stroke="#06b6d4"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+                connectNulls={false}
+              />
+            ) : (
+              products.flatMap((p) => {
+                const isolated = hoveredId != null
+                const emphasis = !isolated || hoveredId === p.product_id
+                const opacity = emphasis ? 1 : 0.2
+                const width = hoveredId === p.product_id ? 2.5 : 1.75
+                const stroke = colors[p.product_id] ?? p.color
+                return [
+                  <Line
+                    key={p.product_id}
+                    type="linear"
+                    dataKey={p.product_id}
+                    name={p.name}
+                    stroke={stroke}
+                    strokeWidth={width}
+                    strokeOpacity={opacity}
+                    dot={false}
+                    isAnimationActive={false}
+                    connectNulls={false}
+                  />,
+                  <Line
+                    key={`${p.product_id}__dashed`}
+                    type="linear"
+                    dataKey={`${p.product_id}__dashed`}
+                    name={`${p.name} (stale fill)`}
+                    stroke={stroke}
+                    strokeWidth={width}
+                    strokeOpacity={opacity}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    isAnimationActive={false}
+                    connectNulls={false}
+                    legendType="none"
+                  />,
+                ]
+              })
+            )}
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )

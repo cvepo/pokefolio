@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 
 /**
- * Constrain the app shell's <main> to one viewport for /dashboard-v2 only.
+ * Constrain the app shell's <main> to one viewport for the terminal dashboard only.
  * Other routes keep `overflow-auto` from (app)/layout.tsx.
  */
 export function useDashboardViewportLock() {

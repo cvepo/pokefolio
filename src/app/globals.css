@@ -104,14 +104,14 @@ body {
 }
 
 /* Dashboard 2.0 — terminal figures + pane scrollbars */
-.dashboard-v2 .tabular-nums,
-.dashboard-v2 .dashboard-num {
+.dashboard-terminal .tabular-nums,
+.dashboard-terminal .dashboard-num {
   font-family: var(--font-dashboard-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 
 /* Recharts SVG ticks don't inherit HTML tabular-nums reliably */
-.dashboard-v2 .recharts-cartesian-axis-tick text {
+.dashboard-terminal .recharts-cartesian-axis-tick text {
   font-family: var(--font-dashboard-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }

@@ -1,424 +1,233 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import Link from "next/link"
-import { TrendingUp, TrendingDown, FolderOpen, Package } from "lucide-react"
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
-import { Portfolio, PortfolioSnapshot } from "@/lib/supabase"
-import { formatCurrency, formatPercent, formatSpan, formatSnapshotDate } from "@/lib/utils"
+import { useEffect, useMemo, useState } from "react"
+import { AlertCircle, LayoutDashboard } from "lucide-react"
+import { FIXTURE_ENVELOPE } from "@/lib/dashboard/fixtures"
+import type { DashboardPayload, Timeframe } from "@/lib/dashboard/contract"
+import { useDashboard } from "@/lib/dashboard/use-dashboard"
+import { PortfolioSwitcher } from "@/components/dashboard/portfolio-switcher"
+import { ValueHeader } from "@/components/dashboard/value-header"
+import { TimeframeRow } from "@/components/dashboard/timeframe-row"
+import { ValueChart } from "@/components/dashboard/value-chart"
+import { WhatChanged } from "@/components/dashboard/what-changed"
+import { PortfolioStrip } from "@/components/dashboard/portfolio-strip"
+import { AllocationPanel } from "@/components/dashboard/allocation-panel"
+import { RecentActivity } from "@/components/dashboard/recent-activity"
+import { HoldingsHeatmap } from "@/components/dashboard/holdings-heatmap"
+import { HoldingPeriodSummary } from "@/components/dashboard/holding-period"
+import { ActivityHoldingTabs } from "@/components/dashboard/activity-holding-tabs"
+import { useDashboardDensity } from "@/components/dashboard/use-density"
+import { useDashboardViewportLock } from "@/components/dashboard/viewport-lock"
+import { cn } from "@/lib/utils"
 
-type Mover = {
-  product_id: string
-  name: string
-  set_name: string
-  tcgplayer_id: string | null
-  current_price: number
-  start_price: number
-  change_per_unit: number
-  change_pct: number
-  qty_held: number
-}
-
-type Timeframe = "7D" | "1M" | "3M" | "6M" | "MAX"
-type ChartMode = "actual" | "projected"
-
-const TIMEFRAME_DAYS: Record<Timeframe, number> = {
-  "7D": 7,
-  "1M": 30,
-  "3M": 90,
-  "6M": 180,
-  "MAX": Infinity,
-}
-
-type PortfolioWithValue = Portfolio & {
-  latestValue: number
-  costBasis: number
-}
-
-export default function DashboardPage() {
-  const [portfolios, setPortfolios] = useState<PortfolioWithValue[]>([])
-  const [allSnapshots, setAllSnapshots] = useState<PortfolioSnapshot[]>([])
+/**
+ * Dashboard 2.0 — the canonical dashboard (decisions.md A6; the original is archived at /dashboard-og).
+ * Reading order follows PRD §10: value → Value Change → What Changed → rest.
+ * Viewport-locked terminal shell: one dvh, panes scroll internally.
+ */
+export default function DashboardV2Page() {
+  const [portfolioId, setPortfolioId] = useState<string | undefined>(undefined)
   const [timeframe, setTimeframe] = useState<Timeframe>("1M")
-  const [chartMode, setChartMode] = useState<ChartMode>("actual")
-  const [loading, setLoading] = useState(true)
-  const [snapshotsLoading, setSnapshotsLoading] = useState(false)
-  const [movers, setMovers] = useState<{ winners: Mover[]; losers: Mover[] }>({ winners: [], losers: [] })
-  const [moversLoading, setMoversLoading] = useState(false)
+  const [useFixture, setUseFixture] = useState(false)
+  const density = useDashboardDensity()
+  useDashboardViewportLock()
 
+  const { data, loading, error, errorHint, refresh } = useDashboard({ portfolioId, timeframe })
+
+  // Fixtures render every section — including the stale, unknown and
+  // missing-history states — without a database behind them.
+  //
+  // This is opt-in via ?fixtures=1, never automatic. It used to fall back on its
+  // own whenever the request failed, which meant a missing migration silently
+  // produced a complete, plausible dashboard built from invented numbers. That
+  // reads as a miscalculating dashboard rather than an absent one, and the
+  // amber banner below was not enough to prevent exactly that confusion.
+  //
+  // A wrong number is worse than no number here: the entire point of PRD §12 is
+  // that the dashboard must never misrepresent the state of its own data.
   useEffect(() => {
-    async function load() {
-      const portfoliosRes = await fetch("/api/portfolios")
-      const portfoliosList: Portfolio[] = await portfoliosRes.json()
-
-      if (!portfoliosList.length) {
-        setLoading(false)
-        return
-      }
-
-      const [itemsResults, snapshotResults] = await Promise.all([
-        Promise.all(
-          portfoliosList.map((p) =>
-            fetch(`/api/portfolios/${p.id}/items`).then((r) => r.json())
-          )
-        ),
-        Promise.all(
-          portfoliosList.map((p) =>
-            // Initial load uses chartMode (which starts as "actual"); the dedicated
-            // toggle effect below re-fetches when the user flips the mode.
-            fetch(`/api/dashboard/snapshots?portfolioId=${p.id}&mode=${chartMode}`).then((r) => r.json())
-          )
-        ),
-      ])
-
-      const enriched: PortfolioWithValue[] = portfoliosList.map((p, i) => {
-        const items = Array.isArray(itemsResults[i]) ? itemsResults[i] : []
-        const latestValue = items.reduce(
-          (sum: number, item: { product?: { current_price?: number }; purchase_price: number; quantity: number }) =>
-            sum + (item.product?.current_price ?? Number(item.purchase_price)) * item.quantity,
-          0
-        )
-        const costBasis = items.reduce(
-          (sum: number, item: { purchase_price: number; quantity: number }) =>
-            sum + Number(item.purchase_price) * item.quantity,
-          0
-        )
-        return { ...p, latestValue, costBasis }
-      })
-
-      const allSnaps: PortfolioSnapshot[] = snapshotResults.flat()
-      setPortfolios(enriched)
-      setAllSnapshots(allSnaps)
-      setLoading(false)
-    }
-    load()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (typeof window === "undefined") return
+    const wanted = new URLSearchParams(window.location.search).get("fixtures") === "1"
+    setUseFixture(wanted && process.env.NODE_ENV === "development")
   }, [])
 
-  // Fetch movers whenever the timeframe changes (or on mount).
-  useEffect(() => {
-    setMoversLoading(true)
-    fetch(`/api/dashboard/movers?timeframe=${timeframe}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setMovers({ winners: data?.winners ?? [], losers: data?.losers ?? [] })
-        setMoversLoading(false)
-      })
-      .catch(() => setMoversLoading(false))
-  }, [timeframe])
+  const envelope = data ?? (useFixture ? FIXTURE_ENVELOPE : null)
+  const payload: DashboardPayload | null = envelope?.data ?? null
 
-  // Refetch snapshots when chartMode toggles (skip initial mount — handled by load()).
-  const isInitialMount = useRef(true)
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false
-      return
-    }
-    if (portfolios.length === 0) return
-    setSnapshotsLoading(true)
-    Promise.all(
-      portfolios.map((p) =>
-        fetch(`/api/dashboard/snapshots?portfolioId=${p.id}&mode=${chartMode}`).then((r) => r.json())
-      )
-    ).then((results) => {
-      setAllSnapshots(results.flat())
-      setSnapshotsLoading(false)
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartMode])
-
-  // Aggregate snapshots across all portfolios by date
-  const aggregatedByDate: Record<string, number> = {}
-  for (const snap of allSnapshots) {
-    aggregatedByDate[snap.snapshot_date] =
-      (aggregatedByDate[snap.snapshot_date] ?? 0) + Number(snap.total_value)
-  }
-
-  const filteredDates = Object.keys(aggregatedByDate)
-    .filter((date) => {
-      const days = TIMEFRAME_DAYS[timeframe]
-      if (days === Infinity) return true
-      // Parse YYYY-MM-DD as local date to avoid TZ shifting the cutoff comparison.
-      const [y, m, d] = date.split("-").map(Number)
-      const dateLocal = new Date(y, m - 1, d)
-      const cutoff = new Date()
-      cutoff.setDate(cutoff.getDate() - days)
-      return dateLocal >= cutoff
-    })
-    .sort()
-
-  const chartData = filteredDates.map((date) => ({
-    date: formatSnapshotDate(date),
-    value: aggregatedByDate[date],
-  }))
-
-  const chartYDomain = (() => {
-    if (chartData.length < 2) return undefined
-    const values = chartData.map((d) => d.value)
-    const min = Math.min(...values)
-    const max = Math.max(...values)
-    const span = max - min
-    const pad = span > 0 ? span * 0.06 : Math.max(Math.abs(min) * 0.02, 10)
-    return [min - pad, max + pad] as [number, number]
-  })()
-
-  const totalValue = portfolios.reduce((s, p) => s + p.latestValue, 0)
-
-  const firstChartValue = chartData[0]?.value
-  const lastChartValue = chartData[chartData.length - 1]?.value
-  const hasPeriodMetric =
-    chartData.length >= 2 &&
-    firstChartValue != null &&
-    lastChartValue != null &&
-    typeof firstChartValue === "number" &&
-    typeof lastChartValue === "number"
-  const periodChange = hasPeriodMetric ? lastChartValue - firstChartValue : null
-  const periodChangePct =
-    periodChange != null && firstChartValue > 0
-      ? (periodChange / firstChartValue) * 100
-      : null
-  const isPositivePeriod = periodChange != null && periodChange >= 0
-
-  if (loading) {
+  const primaryChange = useMemo(() => {
+    if (!payload) return null
     return (
-      <div className="p-8 max-w-5xl mx-auto space-y-6">
-        <div className="h-8 w-48 bg-muted rounded animate-pulse" />
-        <div className="h-72 bg-muted rounded-xl animate-pulse" />
-        <div className="grid grid-cols-2 gap-4">
-          <div className="h-32 bg-muted rounded-lg animate-pulse" />
-          <div className="h-32 bg-muted rounded-lg animate-pulse" />
-        </div>
-      </div>
+      payload.performance.timeframes.find((t) => t.timeframe === timeframe) ??
+      payload.performance.timeframes.find((t) => t.timeframe === "1M") ??
+      null
     )
-  }
+  }, [payload, timeframe])
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Your Pokémon sealed product portfolio</p>
+    <div className="dashboard-terminal flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden px-3 py-2 gap-2 w-full max-xl:overflow-y-auto max-xl:h-auto max-xl:max-h-none">
+      <div className="shrink-0 flex items-center justify-between gap-3 min-w-0">
+        <h1 className="text-sm font-bold flex items-center gap-1.5 min-w-0">
+          <LayoutDashboard size={14} className="shrink-0" />
+          <span className="truncate">Dashboard</span>
+        </h1>
+        <PortfolioSwitcher
+          value={portfolioId ?? "all"}
+          onChange={(id) => setPortfolioId(id === "all" ? undefined : id)}
+        />
       </div>
 
-      {portfolios.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 border border-dashed border-border rounded-xl text-center">
-          <FolderOpen size={44} className="text-muted-foreground mb-4" />
-          <p className="font-semibold text-lg">No portfolios yet</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            <Link href="/portfolios" className="underline underline-offset-2">Create a portfolio</Link>
-            {" "}and add products via{" "}
-            <Link href="/search" className="underline underline-offset-2">Search</Link>
+      {useFixture && (
+        <div className="shrink-0 flex items-start gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          <p>
+            <span className="font-medium">Fixture data</span>
+            {" — "}
+            every number below is fake (<code>?fixtures=1</code>).
           </p>
         </div>
-      ) : (
-        <>
-          {/* Total value header */}
-          <div className="space-y-1">
-            <p className="text-4xl font-bold">{formatCurrency(totalValue)}</p>
-            {hasPeriodMetric && periodChange != null ? (
-              <>
-                <div
-                  className={`flex items-center gap-1.5 text-sm font-medium ${
-                    isPositivePeriod ? "text-emerald-500" : "text-red-500"
-                  }`}
-                >
-                  {isPositivePeriod ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                  <span>
-                    {isPositivePeriod ? "+" : ""}
-                    {formatCurrency(periodChange)}
-                    {periodChangePct != null ? (
-                      <> ({formatPercent(periodChangePct)})</>
-                    ) : (
-                      <> (—%)</>
-                    )}{" "}
-                    · {timeframe === "MAX" && filteredDates.length >= 2
-                      ? `MAX (${formatSpan(filteredDates[0], filteredDates[filteredDates.length - 1])})`
-                      : timeframe}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">Based on synced portfolio history in this range.</p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium">—</span> change for {timeframe} (need more history — run sync)
-              </p>
-            )}
-          </div>
-
-          {/* Chart */}
-          <div className="border border-border rounded-xl p-5 bg-card">
-            <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-              <div className="flex gap-1">
-                {(["7D", "1M", "3M", "6M", "MAX"] as Timeframe[]).map((tf) => (
-                  <button
-                    key={tf}
-                    onClick={() => setTimeframe(tf)}
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                      timeframe === tf
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                    }`}
-                  >
-                    {tf}
-                  </button>
-                ))}
-              </div>
-              <div
-                className="flex gap-1 p-0.5 rounded-md border border-border bg-background/50"
-                title={
-                  chartMode === "projected"
-                    ? "Showing current holdings as if always held — pure market movement"
-                    : "Showing actual portfolio value (changes with buys and sells)"
-                }
-              >
-                {(["actual", "projected"] as ChartMode[]).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setChartMode(m)}
-                    disabled={snapshotsLoading}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-colors capitalize disabled:opacity-50 ${
-                      chartMode === m
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {chartMode === "projected" && (
-              <p className="text-xs text-muted-foreground mb-3 -mt-2">
-                Projected: applies current holdings to historical prices (no buy/sell impact).
-              </p>
-            )}
-
-            {chartData.length < 2 ? (
-              <div className="h-52 flex items-center justify-center text-sm text-muted-foreground">
-                Run a sync to start building price history
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
-                  <defs>
-                    <linearGradient id="dashGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                  <YAxis
-                    domain={chartYDomain ?? ["auto", "auto"]}
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => `$${Math.round(v).toLocaleString()}`}
-                    width={70}
-                  />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
-                    formatter={(value) => [formatCurrency(Number(value)), "Portfolio Value"]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#06b6d4"
-                    strokeWidth={2}
-                    fill="url(#dashGradient)"
-                    dot={false}
-                    baseValue="dataMin"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          {/* Biggest movers (responds to the chart timeframe selector above) */}
-          <div>
-            <div className="flex items-baseline justify-between mb-3">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Biggest movers
-              </h2>
-              <span className="text-xs text-muted-foreground">over {timeframe}</span>
-            </div>
-
-            {moversLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-28 rounded-lg bg-muted animate-pulse" />
-                ))}
-              </div>
-            ) : movers.winners.length === 0 && movers.losers.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">
-                Not enough price history yet to compute movers.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {movers.winners.length > 0 && (
-                  <>
-                    <p className="text-xs font-medium text-emerald-500 uppercase tracking-wide flex items-center gap-1.5">
-                      <TrendingUp size={12} /> Winners
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {movers.winners.map((m) => (
-                        <MoverCard key={m.product_id} mover={m} />
-                      ))}
-                    </div>
-                  </>
-                )}
-                {movers.losers.length > 0 && (
-                  <>
-                    <p className="text-xs font-medium text-red-500 uppercase tracking-wide flex items-center gap-1.5 mt-4">
-                      <TrendingDown size={12} /> Losers
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {movers.losers.map((m) => (
-                        <MoverCard key={m.product_id} mover={m} />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </>
       )}
+
+      {loading && !payload ? (
+        <DashboardSkeleton />
+      ) : error && !payload ? (
+        <div className="flex-1 min-h-0 flex items-center justify-center">
+          <div className="rounded-sm border border-dashed border-border p-8 text-center space-y-2 max-w-md">
+            <AlertCircle className="mx-auto text-muted-foreground" size={24} />
+            <p className="font-medium text-sm">Couldn’t load the dashboard</p>
+            <p className="text-xs text-muted-foreground">{error}</p>
+            {errorHint && (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Next step: </span>
+                {errorHint}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => refresh()}
+              className="text-xs underline underline-offset-2 text-muted-foreground hover:text-foreground"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : payload && envelope ? (
+        <div
+          className={cn(
+            "dashboard-terminal-grid flex-1 min-h-0 min-w-0 grid tabular-nums gap-2",
+            "grid-cols-1 xl:grid-cols-12",
+            /* Locked fractional rows from xl up (15"+); stack below */
+            "xl:grid-rows-[auto_minmax(0,1.25fr)_minmax(0,1fr)]"
+          )}
+        >
+          {/* Row 1 — value → Value Change → portfolio ticker (PRD §10) */}
+          <div className="col-span-1 xl:col-span-12 xl:row-start-1 min-w-0 space-y-1.5">
+            <ValueHeader
+              summary={payload.summary}
+              primaryChange={primaryChange}
+              sync={payload.sync}
+              asOf={envelope.asOf}
+              timeframes={payload.performance.timeframes}
+              activeTimeframe={timeframe}
+              onSelectTimeframe={setTimeframe}
+            />
+            <TimeframeRow
+              timeframes={payload.performance.timeframes}
+              active={timeframe}
+              onSelect={setTimeframe}
+            />
+            <PortfolioStrip summary={payload.summary} ticker />
+          </div>
+
+          {/* Row 2 — chart + What Changed (never demoted) */}
+          <div
+            className={cn(
+              "min-h-0 min-w-0 max-xl:min-h-[220px]",
+              "col-span-1 xl:col-span-8 xl:row-start-2 3xl:col-span-7 4xl:col-span-6"
+            )}
+          >
+            <ValueChart
+              series={payload.performance.series}
+              seriesTimeframe={timeframe}
+              height={density.chartHeight}
+            />
+          </div>
+
+          <div
+            className={cn(
+              "min-h-0 min-w-0 max-xl:min-h-[200px]",
+              "col-span-1 xl:col-span-4 xl:row-start-2 3xl:col-span-5 4xl:col-span-3"
+            )}
+          >
+            <WhatChanged insights={payload.insights} displayCap={density.insightCap} />
+          </div>
+
+          {/* 4xl: Allocation climbs beside What Changed instead of stretching Activity */}
+          {density.tier === "4xl" ? (
+            <div className="min-h-0 min-w-0 4xl:row-start-2 4xl:col-span-3">
+              <AllocationPanel allocation={payload.allocation} />
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "min-h-0 min-w-0 max-xl:min-h-[180px]",
+                "col-span-1 xl:col-span-3 xl:row-start-3 3xl:col-span-3"
+              )}
+            >
+              <AllocationPanel allocation={payload.allocation} />
+            </div>
+          )}
+
+          <div
+            className={cn(
+              "min-h-0 min-w-0 max-xl:min-h-[180px]",
+              "xl:row-start-3",
+              density.holdingPeriodSeparate
+                ? "col-span-1 xl:col-span-3 3xl:col-span-3 4xl:col-span-3"
+                : "col-span-1 xl:col-span-4 3xl:col-span-3"
+            )}
+          >
+            {density.holdingPeriodSeparate ? (
+              <RecentActivity activity={payload.activity} />
+            ) : (
+              <ActivityHoldingTabs
+                activity={payload.activity}
+                positions={payload.positions.positions}
+              />
+            )}
+          </div>
+
+          <div
+            className={cn(
+              "min-h-0 min-w-0 max-xl:min-h-[200px]",
+              "xl:row-start-3",
+              density.holdingPeriodSeparate
+                ? "col-span-1 xl:col-span-6 3xl:col-span-4 4xl:col-span-6"
+                : "col-span-1 xl:col-span-5 3xl:col-span-6"
+            )}
+          >
+            <HoldingsHeatmap positions={payload.positions} />
+          </div>
+
+          {density.holdingPeriodSeparate && (
+            <div className="min-h-0 min-w-0 col-span-1 3xl:col-span-2 3xl:row-start-3 4xl:col-span-3">
+              <HoldingPeriodSummary positions={payload.positions.positions} />
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }
 
-function MoverCard({ mover }: { mover: Mover }) {
-  const positive = mover.change_pct >= 0
+function DashboardSkeleton() {
   return (
-    <Link
-      href={`/products/${encodeURIComponent(mover.product_id)}`}
-      className={`flex flex-col gap-1.5 border rounded-lg p-3 bg-card hover:bg-accent/30 transition-colors ${
-        positive ? "border-emerald-500/30" : "border-red-500/30"
-      }`}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="w-9 h-9 rounded bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-          {mover.tcgplayer_id ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`https://product-images.tcgplayer.com/fit-in/64x64/${mover.tcgplayer_id}.jpg`}
-              alt={mover.name}
-              className="w-9 h-9 object-cover"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
-            />
-          ) : (
-            <Package size={14} className="text-muted-foreground" />
-          )}
-        </div>
-        <p className="text-xs font-medium truncate flex-1">{mover.name}</p>
+    <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-12 grid-rows-[auto_minmax(0,1.25fr)_minmax(0,1fr)] gap-2">
+      <div className="col-span-1 xl:col-span-12 space-y-1.5">
+        <div className="h-8 w-48 bg-muted rounded-sm animate-pulse" />
+        <div className="h-10 bg-muted rounded-sm animate-pulse" />
       </div>
-      <p className="text-sm font-bold mt-0.5">{formatCurrency(mover.current_price)}</p>
-      <div className={`flex items-baseline gap-1 text-xs font-semibold ${positive ? "text-emerald-500" : "text-red-500"}`}>
-        <span>{formatPercent(mover.change_pct)}</span>
-        <span className="opacity-70 font-normal">
-          ({positive ? "+" : ""}{formatCurrency(mover.change_per_unit)}/unit)
-        </span>
-      </div>
-    </Link>
+      <div className="col-span-1 xl:col-span-8 min-h-0 bg-muted rounded-sm animate-pulse" />
+      <div className="col-span-1 xl:col-span-4 min-h-0 bg-muted rounded-sm animate-pulse" />
+    </div>
   )
 }
