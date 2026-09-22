@@ -4,6 +4,22 @@ import { createDemoStore } from "./store-core"
 
 const portfolioId = "00000000-0000-4000-8000-000000000001"
 
+class MemoryStorage {
+  values = new Map<string, string>()
+
+  getItem(key: string) {
+    return this.values.get(key) ?? null
+  }
+
+  setItem(key: string, value: string) {
+    this.values.set(key, value)
+  }
+
+  removeItem(key: string) {
+    this.values.delete(key)
+  }
+}
+
 function fixture(): DemoDataset {
   return {
     asOf: "2026-09-22",
@@ -137,5 +153,58 @@ describe("createDemoStore", () => {
 
     expect(store.state).toEqual({ transactions: fixture().transactions, dirty: false })
     expect(store.getDashboard(undefined, "1M").data.summary.positionCount).toBe(1)
+  })
+
+  it("hydrates visitor changes from session storage", () => {
+    const storage = new MemoryStorage()
+    const first = createDemoStore(fixture(), {
+      storage,
+      randomUUID: () => "visitor-buy",
+    })
+    first.addTransaction({
+      portfolioId,
+      productId: "beta",
+      type: "buy",
+      quantity: 1,
+      price: 70,
+      date: "2026-09-20",
+    })
+
+    const second = createDemoStore(fixture(), { storage })
+
+    expect(second.state).toMatchObject({ dirty: true })
+    expect(second.getTransactions().map((transaction) => transaction.id)).toContain("visitor-buy")
+    second.reset()
+    expect(storage.values.size).toBe(0)
+  })
+
+  it("keeps working when browser storage is unavailable or full", () => {
+    const storage = {
+      getItem() {
+        throw new Error("storage blocked")
+      },
+      setItem() {
+        throw new Error("quota exceeded")
+      },
+      removeItem() {
+        throw new Error("storage blocked")
+      },
+    }
+    const store = createDemoStore(fixture(), {
+      storage,
+      randomUUID: () => "visitor-buy",
+    })
+
+    expect(store.getDashboard(undefined, "1M").data.summary.positionCount).toBe(1)
+    expect(store.addTransaction({
+      portfolioId,
+      productId: "beta",
+      type: "buy",
+      quantity: 1,
+      price: 70,
+      date: "2026-09-20",
+    })).toEqual({ ok: true })
+    expect(store.getDashboard(undefined, "1M").data.summary.positionCount).toBe(2)
+    expect(() => store.reset()).not.toThrow()
   })
 })
