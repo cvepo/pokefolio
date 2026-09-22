@@ -3,10 +3,15 @@ import type { NextRequest } from "next/server"
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"]
 
+/** Exact `/demo` or anything under `/demo/` — not `/demonstration`, `/demo-admin`, etc. */
+export function isDemoPath(pathname: string): boolean {
+  return pathname === "/demo" || pathname.startsWith("/demo/")
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p)) || isDemoPath(pathname)) {
     return NextResponse.next()
   }
 

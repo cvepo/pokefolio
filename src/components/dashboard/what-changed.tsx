@@ -15,9 +15,19 @@ type WhatChangedProps = {
   insights: InsightsPayload
   /** Display-only cap (PRD §19) — never filters stored events. */
   displayCap?: number
+  /**
+   * Called when newly visible unseen events should be marked seen.
+   * Defaults to POST /api/insights/seen. Pass a no-op in demo mode so the
+   * public surface never hits the authenticated API.
+   */
+  onMarkSeen?: (eventIds: string[]) => void
 }
 
-export function WhatChanged({ insights, displayCap = INSIGHT_DISPLAY_CAP }: WhatChangedProps) {
+export function WhatChanged({
+  insights,
+  displayCap = INSIGHT_DISPLAY_CAP,
+  onMarkSeen,
+}: WhatChangedProps) {
   const [expanded, setExpanded] = useState(false)
   const markedRef = useRef<Set<string>>(new Set())
 
@@ -36,6 +46,11 @@ export function WhatChanged({ insights, displayCap = INSIGHT_DISPLAY_CAP }: What
 
     for (const id of unseen) markedRef.current.add(id)
 
+    if (onMarkSeen) {
+      onMarkSeen(unseen)
+      return
+    }
+
     const body: MarkSeenRequest = { eventIds: unseen }
     fetch("/api/insights/seen", {
       method: "POST",
@@ -44,7 +59,7 @@ export function WhatChanged({ insights, displayCap = INSIGHT_DISPLAY_CAP }: What
     }).catch(() => {
       // Endpoint may 404 until backend merges; local mark set prevents retry storms.
     })
-  }, [visible])
+  }, [visible, onMarkSeen])
 
   return (
     <DashboardPanel

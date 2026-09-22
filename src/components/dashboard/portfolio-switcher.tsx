@@ -3,21 +3,34 @@
 import { useEffect, useState } from "react"
 import type { Portfolio } from "@/lib/supabase"
 
+export type PortfolioOption = {
+  id: string
+  name: string
+}
+
 type PortfolioSwitcherProps = {
   value: string
   onChange: (value: string) => void
+  /**
+   * When provided, skip the authenticated /api/portfolios fetch.
+   * Demo mode passes store portfolios so the switcher never hits the network.
+   */
+  portfolios?: PortfolioOption[]
 }
 
-/** Defaults to all portfolios combined (PRD §6). Names from GET /api/portfolios. */
-export function PortfolioSwitcher({ value, onChange }: PortfolioSwitcherProps) {
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+/** Defaults to all portfolios combined (PRD §6). Names from GET /api/portfolios unless `portfolios` is passed. */
+export function PortfolioSwitcher({ value, onChange, portfolios: portfoliosProp }: PortfolioSwitcherProps) {
+  const [fetched, setFetched] = useState<Portfolio[]>([])
 
   useEffect(() => {
+    if (portfoliosProp) return
     fetch("/api/portfolios")
       .then((r) => r.json())
-      .then((data) => setPortfolios(Array.isArray(data) ? data : []))
-      .catch(() => setPortfolios([]))
-  }, [])
+      .then((data) => setFetched(Array.isArray(data) ? data : []))
+      .catch(() => setFetched([]))
+  }, [portfoliosProp])
+
+  const portfolios = portfoliosProp ?? fetched
 
   return (
     <select
