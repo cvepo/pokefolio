@@ -16,6 +16,11 @@ import { cn } from "@/lib/utils"
 
 type HoldingsHeatmapProps = {
   positions: PositionsPayload
+  /**
+   * Override thumbnail URLs. Demo mode passes a CDN builder so tiles never
+   * request the authenticated `/api/product-image` route.
+   */
+  imageUrlFor?: (tcgplayerId: string | null, size: number) => string | null
 }
 
 /** Gap between tiles, in px. Applied as an inset so rects never overlap. */
@@ -35,7 +40,7 @@ type HoverState = { productId: string; x: number; y: number }
  *
  * Stale / unknown / no-history stay visually distinct — never colour-alone.
  */
-export function HoldingsHeatmap({ positions }: HoldingsHeatmapProps) {
+export function HoldingsHeatmap({ positions, imageUrlFor = heatmapImageUrl }: HoldingsHeatmapProps) {
   const { min, max } = positions.heatmapColorDomain
   const observerRef = useRef<ResizeObserver | null>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
@@ -105,6 +110,7 @@ export function HoldingsHeatmap({ positions }: HoldingsHeatmapProps) {
                 rect={rect}
                 dimmed={hover != null && hover.productId !== rect.id}
                 onHover={(x, y) => setHover({ productId: rect.id, x, y })}
+                imageUrlFor={imageUrlFor}
               />
             )
           })}
@@ -130,6 +136,7 @@ function HeatmapTile({
   rect,
   dimmed,
   onHover,
+  imageUrlFor,
 }: {
   position: Position
   domainMin: number
@@ -137,6 +144,7 @@ function HeatmapTile({
   rect: TreemapRect
   dimmed: boolean
   onHover: (x: number, y: number) => void
+  imageUrlFor: (tcgplayerId: string | null, size: number) => string | null
 }) {
   const [imageFailed, setImageFailed] = useState(false)
   const change1M = position.valueChangePct["1M"]
@@ -150,7 +158,7 @@ function HeatmapTile({
   const width = Math.max(0, rect.w - TILE_GAP)
   const height = Math.max(0, rect.h - TILE_GAP)
   const scale = heatmapTileScale(width, height)
-  const imageUrl = imageFailed ? null : heatmapImageUrl(position.tcgplayerId, scale.imageSize)
+  const imageUrl = imageFailed ? null : imageUrlFor(position.tcgplayerId, scale.imageSize)
 
   return (
     <div
