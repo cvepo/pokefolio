@@ -81,4 +81,61 @@ describe("createDemoStore", () => {
     expect(store.searchProducts("BETA SET").map((product) => product.id)).toEqual(["beta"])
     expect(store.getProduct("missing")).toBeNull()
   })
+
+  it("recomputes cost basis and position count after a buy", () => {
+    const store = createDemoStore(fixture(), {
+      storage: null,
+      randomUUID: () => "visitor-buy",
+    })
+
+    expect(store.addTransaction({
+      portfolioId,
+      productId: "beta",
+      type: "buy",
+      quantity: 1,
+      price: 70,
+      date: "2026-09-20",
+    })).toEqual({ ok: true })
+
+    expect(store.getDashboard(undefined, "1M").data.summary).toMatchObject({
+      costBasis: 17_000,
+      positionCount: 2,
+      unitCount: 2,
+    })
+    expect(store.state).toMatchObject({ dirty: true })
+  })
+
+  it("rejects an oversell with the production FIFO guard", () => {
+    const store = createDemoStore(fixture(), { storage: null })
+
+    expect(store.addTransaction({
+      portfolioId,
+      productId: "alpha",
+      type: "sell",
+      quantity: 2,
+      price: 130,
+      date: "2026-09-22",
+    })).toEqual({ ok: false, error: "Cannot sell 2 — only 1 held." })
+    expect(store.state.dirty).toBe(false)
+  })
+
+  it("restores seeded transactions on reset", () => {
+    const store = createDemoStore(fixture(), {
+      storage: null,
+      randomUUID: () => "visitor-buy",
+    })
+    store.addTransaction({
+      portfolioId,
+      productId: "beta",
+      type: "buy",
+      quantity: 1,
+      price: 70,
+      date: "2026-09-20",
+    })
+
+    store.reset()
+
+    expect(store.state).toEqual({ transactions: fixture().transactions, dirty: false })
+    expect(store.getDashboard(undefined, "1M").data.summary.positionCount).toBe(1)
+  })
 })
