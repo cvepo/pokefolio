@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { NextRequest } from "next/server"
 import { proxy } from "@/proxy"
 import { DEMO_TCGPLAYER_IDS } from "@/lib/demo/catalog-ids"
+import { BASE_PATH } from "@/lib/base-path"
 
 const PASSWORD = "test-admin-password"
 
@@ -149,6 +150,32 @@ describe("proxy fails closed when misconfigured", () => {
   })
 
   it("still serves the public demo and login when misconfigured", () => {
+    expect(proxy(request("/demo")).status).toBe(200)
+    expect(proxy(request("/login")).status).toBe(200)
+  })
+})
+
+describe("base path awareness", () => {
+  const original = { ...process.env }
+  beforeEach(() => {
+    process.env.ADMIN_PASSWORD = PASSWORD
+    delete process.env.CRON_SECRET
+  })
+  afterEach(() => {
+    process.env = { ...original }
+  })
+
+  it("redirects to the login page under the base path, not the domain root", () => {
+    // The app is served at www.enzohiu.com/pokefolio, where "/" belongs to a
+    // different project — a bare /login redirect leaves the app entirely.
+    const res = proxy(request("/dashboard"))
+    const location = res.headers.get("location") ?? ""
+    expect(location).toContain(`${BASE_PATH}/login`)
+  })
+
+  it("matches public paths on the path Next reports, which excludes the base path", () => {
+    // Next strips the base path before the proxy sees nextUrl.pathname, so the
+    // matchers here stay written without it.
     expect(proxy(request("/demo")).status).toBe(200)
     expect(proxy(request("/login")).status).toBe(200)
   })

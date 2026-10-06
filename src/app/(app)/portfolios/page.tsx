@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Plus, Trash2, FolderOpen } from "lucide-react"
 import { Portfolio } from "@/lib/supabase"
 import { getStarredPortfolioId, setStarredPortfolioId } from "@/lib/use-active-portfolio"
+import { apiFetch } from "@/lib/base-path"
 
 export default function PortfoliosPage() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
@@ -18,17 +19,17 @@ export default function PortfoliosPage() {
   useEffect(() => { setStarredId(getStarredPortfolioId()) }, [])
 
   async function load() {
-    const res = await fetch("/api/portfolios")
+    const res = await apiFetch("/api/portfolios")
     const data = await res.json()
 
     // Auto-create "Main" portfolio on first use
     if (Array.isArray(data) && data.length === 0) {
-      await fetch("/api/portfolios", {
+      await apiFetch("/api/portfolios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: "Main", description: null }),
       })
-      const refreshed = await fetch("/api/portfolios").then((r) => r.json())
+      const refreshed = await apiFetch("/api/portfolios").then((r) => r.json())
       setPortfolios(refreshed)
     } else {
       setPortfolios(Array.isArray(data) ? data : [])
@@ -42,7 +43,7 @@ export default function PortfoliosPage() {
     e.preventDefault()
     if (!newName.trim()) return
     setCreating(true)
-    const res = await fetch("/api/portfolios", {
+    const res = await apiFetch("/api/portfolios", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName.trim(), description: newDesc.trim() || null }),
@@ -59,7 +60,7 @@ export default function PortfoliosPage() {
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete "${name}"? This will remove all items in it.`)) return
-    await fetch(`/api/portfolios/${id}`, { method: "DELETE" })
+    await apiFetch(`/api/portfolios/${id}`, { method: "DELETE" })
     setPortfolios((prev) => prev.filter((p) => p.id !== id))
   }
 

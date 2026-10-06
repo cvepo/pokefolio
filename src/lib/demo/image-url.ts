@@ -1,3 +1,5 @@
+import { withBasePath } from "@/lib/base-path"
+
 /**
  * Demo product thumbnails.
  *
@@ -9,5 +11,5 @@
 export function demoHeatmapImageUrl(tcgplayerId: string | null, size: number): string | null {
   if (!tcgplayerId || size <= 0) return null
   const px = Math.min(256, Math.max(64, size * 2))
-  return `/api/product-image/${tcgplayerId}?size=${px}`
+  return withBasePath(`/api/product-image/${tcgplayerId}?size=${px}`)
 }

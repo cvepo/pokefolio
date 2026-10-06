@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import type { AppSettings, SyncRun } from "@/lib/supabase"
+import { apiFetch } from "@/lib/base-path"
 
 const SYNC_EVENT = "pokefolio:sync-updated"
 
@@ -26,7 +27,7 @@ export function useSyncStatus() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/settings")
+      const res = await apiFetch("/api/settings")
       if (!res.ok) throw new Error("Failed to load sync status")
       const data = await res.json()
       setSettings(data.settings ?? null)
@@ -51,7 +52,7 @@ export function useSyncStatus() {
     setSyncing(true)
     setError(null)
     try {
-      const res = await fetch("/api/sync", { method: "POST" })
+      const res = await apiFetch("/api/sync", { method: "POST" })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error ?? "Sync failed")
       await refresh()
@@ -69,7 +70,7 @@ export function useSyncStatus() {
 
   const saveSyncDays = useCallback(
     async (days: number[]) => {
-      const res = await fetch("/api/settings", {
+      const res = await apiFetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sync_days: days }),

@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/sync",
+      "path": "/pokefolio/api/sync",
       "schedule": "0 9 * * *"
     }
   ]

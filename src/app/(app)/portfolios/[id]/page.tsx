@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ArrowDown, ArrowLeft, ArrowUp, PackageOpen, Trash2, Package } from "lucide-react"
 import { Portfolio, PortfolioItem } from "@/lib/supabase"
 import { cn, formatCurrency, formatPercent } from "@/lib/utils"
+import { apiFetch } from "@/lib/base-path"
 
 type SortKey =
   | "product"
@@ -54,8 +55,8 @@ export default function PortfolioDetailPage() {
 
   async function load() {
     const [pRes, iRes] = await Promise.all([
-      fetch(`/api/portfolios/${id}`),
-      fetch(`/api/portfolios/${id}/items`),
+      apiFetch(`/api/portfolios/${id}`),
+      apiFetch(`/api/portfolios/${id}/items`),
     ])
     const [pData, iData] = await Promise.all([pRes.json(), iRes.json()])
     setPortfolio(pData?.error ? null : pData)
@@ -105,7 +106,7 @@ export default function PortfolioDetailPage() {
 
   async function handleDelete(productId: string, name: string) {
     if (!confirm(`Delete all transactions for "${name}"? This cannot be undone.`)) return
-    await fetch(`/api/portfolios/${id}/products/${encodeURIComponent(productId)}`, { method: "DELETE" })
+    await apiFetch(`/api/portfolios/${id}/products/${encodeURIComponent(productId)}`, { method: "DELETE" })
     setItems((prev) => prev.filter((p) => p.product_id !== productId))
   }
 
@@ -124,7 +125,7 @@ export default function PortfolioDetailPage() {
     }
     if (trimmed === portfolio.name) { setRenamingPortfolio(false); return }
     try {
-      const res = await fetch(`/api/portfolios/${id}`, {
+      const res = await apiFetch(`/api/portfolios/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),

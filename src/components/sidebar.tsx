@@ -6,6 +6,7 @@ import { LayoutDashboard, FolderOpen, Search, Settings, LogOut, Moon, Sun, BarCh
 import { useTheme } from "@/components/theme-provider"
 import { cn, formatDateTimeShort } from "@/lib/utils"
 import { triggerLabel, useSyncStatus } from "@/lib/use-sync-status"
+import { apiFetch } from "@/lib/base-path"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -23,7 +24,7 @@ export function Sidebar() {
   const { lastRun, syncing, runSync } = useSyncStatus()
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" })
+    await apiFetch("/api/auth/logout", { method: "POST" })
     router.push("/login")
   }
 

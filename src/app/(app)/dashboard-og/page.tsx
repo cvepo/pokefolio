@@ -13,6 +13,7 @@ import { TrendingUp, TrendingDown, FolderOpen, Package } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 import { Portfolio, PortfolioSnapshot } from "@/lib/supabase"
 import { formatCurrency, formatPercent, formatSpan, formatSnapshotDate } from "@/lib/utils"
+import { apiFetch } from "@/lib/base-path"
 
 type Mover = {
   product_id: string
@@ -54,7 +55,7 @@ export default function OgDashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const portfoliosRes = await fetch("/api/portfolios")
+      const portfoliosRes = await apiFetch("/api/portfolios")
       const portfoliosList: Portfolio[] = await portfoliosRes.json()
 
       if (!portfoliosList.length) {
@@ -65,14 +66,14 @@ export default function OgDashboardPage() {
       const [itemsResults, snapshotResults] = await Promise.all([
         Promise.all(
           portfoliosList.map((p) =>
-            fetch(`/api/portfolios/${p.id}/items`).then((r) => r.json())
+            apiFetch(`/api/portfolios/${p.id}/items`).then((r) => r.json())
           )
         ),
         Promise.all(
           portfoliosList.map((p) =>
             // Initial load uses chartMode (which starts as "actual"); the dedicated
             // toggle effect below re-fetches when the user flips the mode.
-            fetch(`/api/dashboard/snapshots?portfolioId=${p.id}&mode=${chartMode}`).then((r) => r.json())
+            apiFetch(`/api/dashboard/snapshots?portfolioId=${p.id}&mode=${chartMode}`).then((r) => r.json())
           )
         ),
       ])
@@ -104,7 +105,7 @@ export default function OgDashboardPage() {
   // Fetch movers whenever the timeframe changes (or on mount).
   useEffect(() => {
     setMoversLoading(true)
-    fetch(`/api/dashboard/movers?timeframe=${timeframe}`)
+    apiFetch(`/api/dashboard/movers?timeframe=${timeframe}`)
       .then((r) => r.json())
       .then((data) => {
         setMovers({ winners: data?.winners ?? [], losers: data?.losers ?? [] })
@@ -124,7 +125,7 @@ export default function OgDashboardPage() {
     setSnapshotsLoading(true)
     Promise.all(
       portfolios.map((p) =>
-        fetch(`/api/dashboard/snapshots?portfolioId=${p.id}&mode=${chartMode}`).then((r) => r.json())
+        apiFetch(`/api/dashboard/snapshots?portfolioId=${p.id}&mode=${chartMode}`).then((r) => r.json())
       )
     ).then((results) => {
       setAllSnapshots(results.flat())

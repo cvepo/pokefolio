@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { DEMO_TCGPLAYER_IDS } from "@/lib/demo/catalog-ids"
+import { withBasePath } from "@/lib/base-path"
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"]
 
@@ -21,6 +22,17 @@ export function isDemoPath(pathname: string): boolean {
 function isDemoProductImagePath(pathname: string): boolean {
   const match = /^\/api\/product-image\/(\d+)$/.exec(pathname)
   return match ? DEMO_TCGPLAYER_IDS.has(match[1]) : false
+}
+
+/**
+ * Absolute path of the login page, including the base path.
+ *
+ * `new URL("/login", request.url)` resolves against the origin and drops the
+ * base path, which under www.enzohiu.com/pokefolio would send people to the
+ * personal site's root instead of this app's login page.
+ */
+function loginPath(): string {
+  return withBasePath("/login")
 }
 
 export function proxy(request: NextRequest) {
@@ -65,7 +77,7 @@ export function proxy(request: NextRequest) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    return NextResponse.redirect(new URL("/login", request.url))
+    return NextResponse.redirect(new URL(loginPath(), request.url))
   }
 
   const cookie = request.cookies.get("auth")
@@ -75,7 +87,7 @@ export function proxy(request: NextRequest) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    return NextResponse.redirect(new URL("/login", request.url))
+    return NextResponse.redirect(new URL(loginPath(), request.url))
   }
 
   return NextResponse.next()

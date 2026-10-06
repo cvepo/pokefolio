@@ -10,6 +10,7 @@ import {
 } from "@/lib/dashboard/insights"
 import { DashboardPanel } from "@/components/dashboard/panel"
 import { cn } from "@/lib/utils"
+import { apiFetch } from "@/lib/base-path"
 
 type WhatChangedProps = {
   insights: InsightsPayload
@@ -52,7 +53,7 @@ export function WhatChanged({
     }
 
     const body: MarkSeenRequest = { eventIds: unseen }
-    fetch("/api/insights/seen", {
+    apiFetch("/api/insights/seen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

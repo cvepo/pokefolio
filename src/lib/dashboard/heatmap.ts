@@ -7,6 +7,7 @@
  */
 
 import type { Fraction, PriceStatus } from "@/lib/dashboard/contract"
+import { withBasePath } from "@/lib/base-path"
 
 export const HEATMAP_CLAMP = 0.25 as const
 
@@ -158,5 +159,5 @@ export function heatmapTileScale(width: number, height: number): HeatmapTileScal
 export function heatmapImageUrl(tcgplayerId: string | null, size: number): string | null {
   if (!tcgplayerId || size <= 0) return null
   // Request at 2x so the thumbnail stays sharp on a retina display.
-  return `/api/product-image/${tcgplayerId}?size=${Math.min(256, Math.max(64, size * 2))}`
+  return withBasePath(`/api/product-image/${tcgplayerId}?size=${Math.min(256, Math.max(64, size * 2))}`)
 }

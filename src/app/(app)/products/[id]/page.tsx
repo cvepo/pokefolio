@@ -8,6 +8,7 @@ import { Portfolio, Product, PriceSnapshot, Transaction } from "@/lib/supabase"
 import { formatCurrency, formatPercent, formatSpan, formatSnapshotDate } from "@/lib/utils"
 import { useActivePortfolio } from "@/lib/use-active-portfolio"
 import { computeHoldings } from "@/lib/holdings"
+import { apiFetch } from "@/lib/base-path"
 
 type Timeframe = "7D" | "1M" | "3M" | "6M" | "MAX"
 
@@ -96,7 +97,7 @@ export default function ProductPage() {
     if (!patch) { cancelEdit(); return }
 
     try {
-      const res = await fetch(`/api/transactions/${txId}`, {
+      const res = await apiFetch(`/api/transactions/${txId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -111,16 +112,16 @@ export default function ProductPage() {
   }
 
   useEffect(() => {
-    fetch(`/api/products/${id}`).then((r) => r.json()).then(({ product, snapshots }) => {
+    apiFetch(`/api/products/${id}`).then((r) => r.json()).then(({ product, snapshots }) => {
       setProduct(product); setSnapshots(snapshots ?? []); setLoading(false)
     })
-    fetch("/api/portfolios").then((r) => r.json()).then((data) => setPortfolios(Array.isArray(data) ? data : []))
+    apiFetch("/api/portfolios").then((r) => r.json()).then((data) => setPortfolios(Array.isArray(data) ? data : []))
   }, [id])
 
   // Load transactions for active portfolio + this product
   useEffect(() => {
     if (!activePortfolioId || !id) { setTransactions([]); return }
-    fetch(`/api/portfolios/${activePortfolioId}/transactions?productId=${encodeURIComponent(id)}`)
+    apiFetch(`/api/portfolios/${activePortfolioId}/transactions?productId=${encodeURIComponent(id)}`)
       .then((r) => r.json())
       .then((data) => setTransactions(Array.isArray(data) ? data : []))
   }, [activePortfolioId, id])
@@ -153,7 +154,7 @@ export default function ProductPage() {
     if (!activePortfolioId || !id) return
     setTxError("")
     setAdding(true)
-    const res = await fetch(`/api/portfolios/${activePortfolioId}/transactions`, {
+    const res = await apiFetch(`/api/portfolios/${activePortfolioId}/transactions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -178,7 +179,7 @@ export default function ProductPage() {
 
   async function handleDeleteTx(txId: string) {
     if (!confirm("Delete this transaction?")) return
-    const res = await fetch(`/api/transactions/${txId}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/transactions/${txId}`, { method: "DELETE" })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { alert(data?.error ?? "Failed to delete"); return }
     setTransactions((prev) => prev.filter((t) => t.id !== txId))

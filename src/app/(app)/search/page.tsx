@@ -5,6 +5,7 @@ import { Search, Plus, Package, CheckCircle, ChevronDown } from "lucide-react"
 import { Portfolio } from "@/lib/supabase"
 import { formatCurrency } from "@/lib/utils"
 import { useActivePortfolio } from "@/lib/use-active-portfolio"
+import { apiFetch } from "@/lib/base-path"
 
 type SearchResult = {
   id: string
@@ -54,7 +55,7 @@ export default function SearchPage() {
 
   // Load portfolios once
   useEffect(() => {
-    fetch("/api/portfolios")
+    apiFetch("/api/portfolios")
       .then((r) => r.json())
       .then((data) => setPortfolios(Array.isArray(data) ? data : []))
   }, [])
@@ -62,7 +63,7 @@ export default function SearchPage() {
   // Load items for active portfolio whenever it changes
   useEffect(() => {
     if (!activePortfolioId) { setPortfolioItems(new Set()); return }
-    fetch(`/api/portfolios/${activePortfolioId}/items`)
+    apiFetch(`/api/portfolios/${activePortfolioId}/items`)
       .then((r) => r.json())
       .then((data: Array<{ product_id: string }>) => {
         setPortfolioItems(new Set(Array.isArray(data) ? data.map((i) => i.product_id) : []))
@@ -88,7 +89,7 @@ export default function SearchPage() {
     setError("")
     setResults([])
 
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
+    const res = await apiFetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
     const data = await res.json()
 
     if (!res.ok) {
@@ -115,7 +116,7 @@ export default function SearchPage() {
     if (!addModal || !activePortfolioId) return
     setAdding(true)
 
-    await fetch(`/api/portfolios/${activePortfolioId}/transactions`, {
+    await apiFetch(`/api/portfolios/${activePortfolioId}/transactions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

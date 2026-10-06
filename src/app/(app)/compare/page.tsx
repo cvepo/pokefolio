@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import type { CompareSeriesResponse } from "@/lib/compare-series"
 import { CompareView } from "@/components/compare/compare-view"
+import { apiFetch } from "@/lib/base-path"
 
 /**
  * Compare, for the authenticated app.
@@ -20,7 +21,7 @@ export default function ComparePage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/compare/series")
+      const res = await apiFetch("/api/compare/series")
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error ?? `Failed to load (${res.status})`)

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { apiFetch } from "@/lib/base-path"
 
 export default function LoginPage() {
   const [password, setPassword] = useState("")
@@ -15,7 +16,7 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
 
-    const res = await fetch("/api/auth/login", {
+    const res = await apiFetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),

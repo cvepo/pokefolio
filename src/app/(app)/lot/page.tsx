@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { apiFetch } from "@/lib/base-path"
 
 /**
  * Lot pricing page for pokefolio.
@@ -162,7 +163,7 @@ export default function LotPage() {
       prev.map((r) => (r.checked ? { ...r, loading: true } : r))
     );
     try {
-      const res = await fetch("/api/lot/search", {
+      const res = await apiFetch("/api/lot/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ queries: checked.map((r) => r.text.trim()) }),

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { BarChart3, TrendingUp, TrendingDown } from "lucide-react"
 import { Portfolio } from "@/lib/supabase"
 import { formatCurrency, formatPercent } from "@/lib/utils"
+import { apiFetch } from "@/lib/base-path"
 
 type Stats = {
   totalInvested: number
@@ -29,7 +30,7 @@ export default function DataPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/portfolios")
+    apiFetch("/api/portfolios")
       .then((r) => r.json())
       .then((data) => setPortfolios(Array.isArray(data) ? data : []))
   }, [])

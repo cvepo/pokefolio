@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import type { Portfolio } from "@/lib/supabase"
+import { apiFetch } from "@/lib/base-path"
 
 export type PortfolioOption = {
   id: string
@@ -24,7 +25,7 @@ export function PortfolioSwitcher({ value, onChange, portfolios: portfoliosProp 
 
   useEffect(() => {
     if (portfoliosProp) return
-    fetch("/api/portfolios")
+    apiFetch("/api/portfolios")
       .then((r) => r.json())
       .then((data) => setFetched(Array.isArray(data) ? data : []))
       .catch(() => setFetched([]))
